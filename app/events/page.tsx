@@ -90,7 +90,7 @@ export default function EventsPage() {
 
       params.set("limit", "250");
 
-      const response = await fetch(`/api/events/discover?${params.toString()}`, {
+      const response = await fetch(`/api/events?${params.toString()}`, {
         cache: "no-store",
       });
 
