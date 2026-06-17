@@ -50,7 +50,6 @@ export type BoothEvent = {
   venue: string | null;
   start_date: string;
   end_date: string | null;
-  application_deadline: string | null;
   booth_status: BoothStatus;
   booth_price_min: number | null;
   booth_price_max: number | null;
@@ -126,7 +125,6 @@ export type EventFilters = {
 export type SavedFilter = {
   id: string;
   name?: string | null;
-  email?: string | null;
   filters: EventFilters;
   created_at?: string;
   createdAt?: string;
