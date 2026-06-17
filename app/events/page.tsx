@@ -248,16 +248,6 @@ export default function EventsPage() {
           </div>
         </section>
 
-        <section className="mb-6 rounded-2xl border border-cyan-900/60 bg-cyan-950/20 p-5 text-sm leading-6 text-cyan-100">
-          <strong className="text-cyan-300">Coverage:</strong>{" "}
-          Korea includes COEX, KINTEX, SETEC, BEXCO, EXCO, AI EXPO KOREA,
-          Smart Tech Korea, NextRise, and Try Everything. Japan includes Tokyo
-          Big Sight, Makuhari Messe, SusHi Tech Tokyo, Manufacturing World Tokyo,
-          and developer/AI conference directories. America includes
-          WeAreDevelopers North America, The AI Conference, Startup Grind,
-          NVIDIA GTC, CES, and developer conference directories.
-        </section>
-
         {error ? (
           <div className="mb-6 rounded-2xl border border-red-900 bg-red-950/40 p-5 text-red-200">
             {error}
