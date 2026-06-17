@@ -8,6 +8,9 @@ export type CuratedTechEvent = {
   url: string;
   description: string;
   tags: string[];
+  category?: string;
+  resultType?: "curated" | "searched" | "scraped" | "manual";
+  lastVerified?: string;
   startDate: string;
   endDate: string;
 };
@@ -337,5 +340,156 @@ export const CURATED_TECH_EVENTS: CuratedTechEvent[] = [
     startDate: "2027-02-17",
     endDate: "2027-02-19",
   },
-
+  {
+    title: "K-ICT WEEK in BUSAN 2026",
+    country: "Korea",
+    city: "Busan",
+    venue: "BEXCO Exhibition Center 1, Hall 3",
+    sourceName: "K-ICT WEEK in BUSAN",
+    sourceUrl: "https://ictweek.kr/en/html/10_kict/index.php",
+    url: "https://ictweek.kr/en/html/00_main/",
+    description:
+      "Comprehensive future technology exhibition in Busan held with AI KOREA, CLOUD EXPO KOREA, and IT EXPO BUSAN. Covers AI convergence, cloud computing, big data, robotics, IT convergence, and software.",
+    tags: ["IT", "AI", "cloud", "big data", "robotics", "software", "startup"],
+    startDate: "2026-09-09",
+    endDate: "2026-09-11",
+  },
+  {
+    title: "AI KOREA 2026",
+    country: "Korea",
+    city: "Busan",
+    venue: "BEXCO Exhibition Center 1, Hall 3",
+    sourceName: "K-ICT WEEK in BUSAN",
+    sourceUrl: "https://ictweek.kr/en/html/01_ai/index.php",
+    url: "https://ictweek.kr/en/html/01_ai/index.php",
+    description:
+      "AI-focused exhibition covering AI+X, digital twin, metaverse, edtech, blockchain, and applied artificial intelligence technologies.",
+    tags: ["AI", "artificial intelligence", "digital twin", "metaverse", "blockchain", "edtech"],
+    startDate: "2026-09-09",
+    endDate: "2026-09-11",
+  },
+  {
+    title: "CLOUD EXPO KOREA 2026",
+    country: "Korea",
+    city: "Busan",
+    venue: "BEXCO Exhibition Center 1, Hall 3",
+    sourceName: "K-ICT WEEK in BUSAN",
+    sourceUrl: "https://ictweek.kr/en/html/02_clud/index.php",
+    url: "https://ictweek.kr/en/html/02_clud/index.php",
+    description:
+      "Cloud technology exhibition covering cloud infrastructure, security, healthcare cloud, enterprise solutions, logistics, maritime, manufacturing, and digital transformation.",
+    tags: ["cloud", "infrastructure", "security", "enterprise", "digital transformation", "SaaS"],
+    startDate: "2026-09-09",
+    endDate: "2026-09-11",
+  },
+  {
+    title: "IT EXPO BUSAN 2026",
+    country: "Korea",
+    city: "Busan",
+    venue: "BEXCO Exhibition Center 1, Hall 3",
+    sourceName: "K-ICT WEEK in BUSAN",
+    sourceUrl: "https://ictweek.kr/en/html/03_it/index.php",
+    url: "https://ictweek.kr/en/html/03_it/index.php",
+    description:
+      "Busan IT exhibition focused on IT convergence, maritime IT, software solutions, IT components, and B2B technology business opportunities.",
+    tags: ["IT", "software", "B2B", "IT convergence", "maritime technology", "technology"],
+    startDate: "2026-09-09",
+    endDate: "2026-09-11",
+  },
+  {
+    title: "World Smart City Expo 2026",
+    country: "Korea",
+    city: "Busan",
+    venue: "BEXCO Exhibition Center 1",
+    sourceName: "World Smart City Expo",
+    sourceUrl: "https://worldsmartcityexpo.com/eng/",
+    url: "https://worldsmartcityexpo.com/eng/",
+    description:
+      "Smart city technology exhibition with conferences, awards, business programs, export consultation, corporate presentations, and smart city experience zones.",
+    tags: ["smart city", "cloud", "IoT", "mobility", "digital transformation", "technology"],
+    startDate: "2026-09-09",
+    endDate: "2026-09-11",
+  },
+  {
+    title: "Korea Cloud & Datacenter Convention 2026",
+    country: "Korea",
+    city: "Seoul",
+    venue: "Seoul",
+    sourceName: "Cloud & Datacenter Convention",
+    sourceUrl: "https://tickets.w.media/events/korea-cloud-datacenter-convention-2026/119668",
+    url: "https://tickets.w.media/events/korea-cloud-datacenter-convention-2026/119668",
+    description:
+      "Cloud and datacenter convention focused on Korea's AI-powered digital economy, digital infrastructure, datacenter operations, cloud platforms, and enterprise infrastructure.",
+    tags: ["cloud", "datacenter", "AI", "infrastructure", "enterprise", "digital economy"],
+    startDate: "2026-09-11",
+    endDate: "2026-09-11",
+  },
+  {
+    title: "AWS Summit Japan 2026",
+    country: "Japan",
+    city: "Chiba",
+    venue: "Makuhari Messe",
+    sourceName: "AWS Summit Japan",
+    sourceUrl: "https://aws.amazon.com/jp/events/summits/japan/",
+    url: "https://aws.amazon.com/jp/events/summits/japan/",
+    description:
+      "Japan cloud and AI conference for developers, engineers, startups, executives, and technology leaders. Covers cloud infrastructure, Agentic AI, serverless computing, data, and AWS ecosystem solutions.",
+    tags: ["cloud", "AI", "developer", "serverless", "data", "startup", "infrastructure"],
+    category: "Cloud",
+    resultType: "searched",
+    lastVerified: "2026-06-17",
+    startDate: "2026-06-25",
+    endDate: "2026-06-26",
+  },
+  {
+    title: "CEATEC 2026",
+    country: "Japan",
+    city: "Chiba",
+    venue: "Makuhari Messe",
+    sourceName: "CEATEC",
+    sourceUrl: "https://www.ceatec.com/",
+    url: "https://www.ceatec.com/",
+    description:
+      "Major Japanese technology exhibition focused on digital transformation, electronics, CPS, IoT, robotics, AI, Society 5.0, and cross-industry innovation.",
+    tags: ["technology", "AI", "IoT", "robotics", "electronics", "digital transformation", "startup"],
+    category: "Technology",
+    resultType: "searched",
+    lastVerified: "2026-06-17",
+    startDate: "2026-10-13",
+    endDate: "2026-10-16",
+  },
+  {
+    title: "Japan IT Week Autumn 2026",
+    country: "Japan",
+    city: "Chiba",
+    venue: "Makuhari Messe",
+    sourceName: "Japan IT Week",
+    sourceUrl: "https://www.japan-it.jp/autumn/en-gb.html",
+    url: "https://www.japan-it.jp/autumn/en-gb.html",
+    description:
+      "Japan IT and DX exhibition covering system development, operation, maintenance, enterprise software, sales technology, e-commerce, and digital transformation.",
+    tags: ["IT", "software", "developer", "DX", "enterprise", "SaaS", "digital transformation"],
+    category: "Developer",
+    resultType: "searched",
+    lastVerified: "2026-06-17",
+    startDate: "2026-10-21",
+    endDate: "2026-10-23",
+  },
+  {
+    title: "Factory Innovation Week Tokyo 2027",
+    country: "Japan",
+    city: "Tokyo",
+    venue: "Tokyo Big Sight",
+    sourceName: "Factory Innovation Week",
+    sourceUrl: "https://www.fiweek.jp/tokyo/en-gb.html",
+    url: "https://www.fiweek.jp/tokyo/en-gb.html",
+    description:
+      "Smart factory and manufacturing technology exhibition covering factory automation, robotics, work efficiency, safety, production innovation, and industrial digital transformation.",
+    tags: ["smart factory", "automation", "robotics", "IoT", "manufacturing", "DX"],
+    category: "Hardware",
+    resultType: "searched",
+    lastVerified: "2026-06-17",
+    startDate: "2027-02-17",
+    endDate: "2027-02-19",
+  }
 ];

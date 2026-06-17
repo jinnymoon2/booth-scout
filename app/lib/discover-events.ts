@@ -20,6 +20,9 @@ export type DiscoveredEvent = {
   url: string;
   description?: string;
   tags: string[];
+  category?: string;
+  resultType?: "curated" | "searched" | "scraped" | "manual";
+  lastVerified?: string;
   startDate?: string;
   endDate?: string;
 };
