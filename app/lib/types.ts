@@ -87,3 +87,15 @@ export type EventFilters = {
   techOnly?: boolean;
   upcomingOnly?: boolean;
 };
+
+
+export type SavedFilter = {
+  id: string;
+  name?: string;
+  email?: string;
+  filters: EventFilters;
+  created_at?: string;
+  createdAt?: string;
+  updated_at?: string;
+  updatedAt?: string;
+};
