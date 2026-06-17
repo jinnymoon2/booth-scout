@@ -8,8 +8,8 @@ export async function GET(request: NextRequest) {
 
   const country = searchParams.get("country") ?? undefined;
   const query = searchParams.get("query") ?? undefined;
-  const rawLimit = Number(searchParams.get("limit") ?? 100);
-  const limit = Number.isFinite(rawLimit) ? rawLimit : 100;
+  const rawLimit = Number(searchParams.get("limit") ?? 250);
+  const limit = Number.isFinite(rawLimit) ? rawLimit : 250;
 
   try {
     const events = await discoverITEvents({

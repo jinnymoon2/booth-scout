@@ -186,7 +186,7 @@ export async function discoverITEvents(options?: {
 }) {
   const country = normalizeCountry(options?.country);
   const query = options?.query?.trim() ?? "";
-  const limit = options?.limit ?? 100;
+  const limit = options?.limit ?? 250;
 
   const sources = getSourcesForCountry(country);
   const discovered: DiscoveredEvent[] = [];
