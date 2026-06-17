@@ -64,3 +64,26 @@ export type BoothEvent = {
   verified_status: string;
   last_verified_at: string | null;
 };
+
+
+export type EventFilters = {
+  q?: string;
+  query?: string;
+  search?: string;
+  country?: string;
+  countries?: string[];
+  category?: string;
+  categories?: string[];
+  tags?: string[];
+  venue?: string;
+  location?: string;
+  source?: string;
+  startDate?: string;
+  endDate?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  from?: string;
+  to?: string;
+  techOnly?: boolean;
+  upcomingOnly?: boolean;
+};
