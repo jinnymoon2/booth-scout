@@ -5,6 +5,7 @@ import {
   looksLikeITEvent,
   normalizeCountry,
 } from "./event-sources";
+import { isUpcomingOrActive } from "./date-utils";
 
 export type DiscoveredEvent = {
   title: string;
@@ -43,9 +44,7 @@ function unique<T>(items: T[], getKey: (item: T) => string) {
   for (const item of items) {
     const key = getKey(item).toLowerCase().trim();
 
-    if (!key || seen.has(key)) {
-      continue;
-    }
+    if (!key || seen.has(key)) continue;
 
     seen.add(key);
     result.push(item);
@@ -70,9 +69,7 @@ async function fetchText(url: string) {
       },
     });
 
-    if (!response.ok) {
-      return "";
-    }
+    if (!response.ok) return "";
 
     return await response.text();
   } catch {
@@ -82,23 +79,70 @@ async function fetchText(url: string) {
   }
 }
 
-function extractDates(text: string) {
-  const patterns = [
-    /\b(20\d{2})[./-](\d{1,2})[./-](\d{1,2})\b/g,
-    /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+20\d{2}\b/gi,
-    /\b\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+20\d{2}\b/gi,
-  ];
+function extractDateRange(text: string): {
+  startDate?: string;
+  endDate?: string;
+} {
+  const ymdRange = text.match(
+    /\b(20\d{2})[./-](\d{1,2})[./-](\d{1,2})\s*(?:~|-|–|—|to)\s*(?:(20\d{2})[./-])?(\d{1,2})[./-](\d{1,2})\b/
+  );
 
-  const matches: string[] = [];
+  if (ymdRange) {
+    const startYear = ymdRange[1];
+    const startMonth = ymdRange[2].padStart(2, "0");
+    const startDay = ymdRange[3].padStart(2, "0");
+    const endYear = ymdRange[4] || startYear;
+    const endMonth = ymdRange[5].padStart(2, "0");
+    const endDay = ymdRange[6].padStart(2, "0");
 
-  for (const pattern of patterns) {
-    const found = text.match(pattern);
-    if (found) {
-      matches.push(...found);
-    }
+    return {
+      startDate: `${startYear}-${startMonth}-${startDay}`,
+      endDate: `${endYear}-${endMonth}-${endDay}`,
+    };
   }
 
-  return matches.slice(0, 2);
+  const singleYmd = text.match(/\b(20\d{2})[./-](\d{1,2})[./-](\d{1,2})\b/);
+
+  if (singleYmd) {
+    const year = singleYmd[1];
+    const month = singleYmd[2].padStart(2, "0");
+    const day = singleYmd[3].padStart(2, "0");
+
+    return {
+      startDate: `${year}-${month}-${day}`,
+      endDate: `${year}-${month}-${day}`,
+    };
+  }
+
+  const monthRange = text.match(
+    /\b(Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\s*(?:~|-|–|—|to)\s*(?:(Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)[a-z]*\.?\s+)?(\d{1,2})(?:st|nd|rd|th)?[,]?\s+(20\d{2})\b/i
+  );
+
+  if (monthRange) {
+    const startMonth = monthRange[1];
+    const startDay = monthRange[2];
+    const endMonth = monthRange[3] || startMonth;
+    const endDay = monthRange[4];
+    const year = monthRange[5];
+
+    return {
+      startDate: `${startMonth} ${startDay}, ${year}`,
+      endDate: `${endMonth} ${endDay}, ${year}`,
+    };
+  }
+
+  const monthSingle = text.match(
+    /\b(Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s+(20\d{2})\b/i
+  );
+
+  if (monthSingle) {
+    return {
+      startDate: `${monthSingle[1]} ${monthSingle[2]}, ${monthSingle[3]}`,
+      endDate: `${monthSingle[1]} ${monthSingle[2]}, ${monthSingle[3]}`,
+    };
+  }
+
+  return {};
 }
 
 function scoreLine(line: string) {
@@ -111,9 +155,7 @@ function scoreLine(line: string) {
     }
   }
 
-  if (/\b20\d{2}\b/.test(line)) {
-    score += 1;
-  }
+  if (/\b20\d{2}\b/.test(line)) score += 1;
 
   if (
     /\bconference|expo|summit|week|forum|fair|show|festival|meetup|demo day|exhibition|전시|박람회|컨퍼런스|포럼|세미나|행사\b/i.test(
@@ -123,13 +165,8 @@ function scoreLine(line: string) {
     score += 2;
   }
 
-  if (line.length >= 12 && line.length <= 180) {
-    score += 1;
-  }
-
-  if (line.length > 240) {
-    score -= 2;
-  }
+  if (line.length >= 12 && line.length <= 180) score += 1;
+  if (line.length > 240) score -= 2;
 
   return score;
 }
@@ -147,7 +184,7 @@ function extractCandidateLines(text: string) {
     }))
     .filter((item) => item.score >= 3 && looksLikeITEvent(item.line))
     .sort((a, b) => b.score - a.score)
-    .slice(0, 30)
+    .slice(0, 40)
     .map((item) => item.line);
 }
 
@@ -160,16 +197,12 @@ function tagsFromText(text: string) {
 }
 
 function matchesQuery(text: string, query?: string) {
-  if (!query || !query.trim()) {
-    return true;
-  }
+  if (!query || !query.trim()) return true;
 
   const normalizedText = text.toLowerCase();
   const normalizedQuery = query.toLowerCase().trim();
 
-  if (normalizedText.includes(normalizedQuery)) {
-    return true;
-  }
+  if (normalizedText.includes(normalizedQuery)) return true;
 
   const queryWords = normalizedQuery
     .split(/\s+/)
@@ -195,9 +228,7 @@ export async function discoverITEvents(options?: {
     sources.map(async (source) => {
       const html = await fetchText(source.url);
 
-      if (!html) {
-        return;
-      }
+      if (!html) return;
 
       const text = stripHtml(html);
       const candidates = extractCandidateLines(text);
@@ -207,13 +238,11 @@ export async function discoverITEvents(options?: {
           source.city ?? ""
         } ${source.country}`;
 
-        if (!matchesQuery(combined, query)) {
-          continue;
-        }
+        if (!matchesQuery(combined, query)) continue;
 
-        const dates = extractDates(candidate);
+        const dates = extractDateRange(candidate);
 
-        discovered.push({
+        const event: DiscoveredEvent = {
           title: candidate.slice(0, 140),
           country: source.country,
           city: source.city,
@@ -223,19 +252,21 @@ export async function discoverITEvents(options?: {
           url: source.url,
           description: `Discovered from ${source.name}. Please verify the final schedule on the official source page.`,
           tags: tagsFromText(combined),
-          startDate: dates[0],
-          endDate: dates[1],
-        });
+          startDate: dates.startDate,
+          endDate: dates.endDate,
+        };
+
+        if (isUpcomingOrActive(event)) {
+          discovered.push(event);
+        }
       }
     })
   );
 
-  const fallbackEvents: DiscoveredEvent[] = EVENT_SOURCES.filter((source) => {
+  const fallbackSources: DiscoveredEvent[] = EVENT_SOURCES.filter((source) => {
     const combined = `${source.name} ${source.venue ?? ""} ${source.country}`;
 
-    if (!matchesQuery(combined, query)) {
-      return false;
-    }
+    if (!matchesQuery(combined, query)) return false;
 
     return looksLikeITEvent(combined) || source.sourceType !== "venue-calendar";
   }).map((source) => ({
@@ -247,11 +278,13 @@ export async function discoverITEvents(options?: {
     sourceUrl: source.url,
     url: source.url,
     description:
-      "Official event source for finding IT, AI, startup, developer, and technology-related events.",
+      "Continuously updated source for finding IT, AI, startup, developer, and technology-related events.",
     tags: tagsFromText(source.name),
   }));
 
-  return unique([...discovered, ...fallbackEvents], (event) => {
+  return unique([...discovered, ...fallbackSources], (event) => {
     return `${event.title}-${event.country}-${event.venue ?? ""}`;
-  }).slice(0, limit);
+  })
+    .filter(isUpcomingOrActive)
+    .slice(0, limit);
 }

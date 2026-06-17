@@ -1,385 +1,287 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getTodayLabel, isUpcomingOrActive } from "../lib/date-utils";
 
-type EventItem = {
-  id: string;
+type EventCard = {
   title: string;
-  description?: string;
-  category?: string;
-  tags?: string[] | string;
+  country: string;
+  city?: string;
   venue?: string;
-  location?: string;
-  country?: string;
-  start_date?: string | null;
-  end_date?: string | null;
-  date?: string | null;
-  organizer?: string;
-  source?: string;
-  url?: string;
-  image_url?: string | null;
-  source_kind?: string;
-  result_type?: "event" | "source" | string;
-  priority?: number;
+  sourceName: string;
+  sourceUrl: string;
+  url: string;
+  description?: string;
+  tags: string[];
+  startDate?: string;
+  endDate?: string;
 };
 
-function formatDate(value?: string | null) {
-  if (!value) return "Continuously updated";
+const COUNTRY_OPTIONS = ["All countries", "Korea", "Japan", "United States", "Global"];
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
+function formatDateRange(event: EventCard) {
+  if (!event.startDate && !event.endDate) {
+    return "Continuously updated";
+  }
 
-  return new Intl.DateTimeFormat("en", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(date);
+  if (event.startDate && event.endDate && event.startDate !== event.endDate) {
+    return `${event.startDate} - ${event.endDate}`;
+  }
+
+  return event.startDate || event.endDate || "Continuously updated";
 }
 
-function normalizeCountry(country?: string | null) {
-  const raw = (country || "").trim();
-  const lower = raw.toLowerCase();
-
-  if (
-    lower === "south korea" ||
-    lower === "republic of korea" ||
-    lower === "korea republic of" ||
-    lower === "rok" ||
-    raw === "대한민국" ||
-    raw === "한국" ||
-    lower === "korea"
-  ) {
-    return "Korea";
-  }
-
-  if (lower === "japan" || raw === "日本" || raw === "일본") {
-    return "Japan";
-  }
-
-  if (
-    lower === "america" ||
-    lower === "usa" ||
-    lower === "u.s." ||
-    lower === "u.s.a." ||
-    lower === "us" ||
-    lower === "united states" ||
-    lower === "united states of america" ||
-    raw === "미국"
-  ) {
-    return "America";
-  }
-
-  return raw || "Unknown";
-}
-
-function getEventDate(event: EventItem) {
-  return event.start_date || event.date || null;
-}
-
-function getResultBadge(event: EventItem) {
-  if (event.result_type === "source") {
-    if (event.source_kind === "venue") return "Venue Source";
-    if (event.source_kind === "directory") return "Conference Directory";
-    if (event.source_kind === "festival") return "Startup Festival";
-    if (event.source_kind === "conference") return "Conference Source";
-    return "Discovery Source";
-  }
-
-  return "Event";
+function getLocation(event: EventCard) {
+  return [event.venue, event.city].filter(Boolean).join(", ") || event.country;
 }
 
 export default function EventsPage() {
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [events, setEvents] = useState<EventCard[]>([]);
   const [query, setQuery] = useState("");
-  const [country, setCountry] = useState("all");
+  const [country, setCountry] = useState("All countries");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  async function loadEvents(nextCountry = country, nextQuery = query) {
-    setLoading(true);
+  async function loadEvents() {
+    setIsLoading(true);
     setError("");
 
     try {
       const params = new URLSearchParams();
 
-      if (nextCountry && nextCountry !== "all") {
-        params.set("country", nextCountry);
+      if (query.trim()) {
+        params.set("query", query.trim());
       }
 
-      if (nextQuery.trim()) {
-        params.set("q", nextQuery.trim());
+      if (country !== "All countries") {
+        params.set("country", country);
       }
 
-      params.set("includeSources", "true");
+      params.set("limit", "250");
 
-      const response = await fetch(`/api/events?${params.toString()}`, {
+      const response = await fetch(`/api/events/discover?${params.toString()}`, {
         cache: "no-store",
       });
 
-      const payload = await response.json();
+      const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(payload.error || "Failed to load events.");
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "Failed to load events.");
       }
 
-      const normalizedEvents = (payload.events || []).map((event: EventItem) => ({
-        ...event,
-        country: normalizeCountry(event.country),
-      }));
-
-      setEvents(normalizedEvents);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load events.");
-      setEvents([]);
+      setEvents(data.events || []);
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Failed to load events."
+      );
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }
 
   useEffect(() => {
-    loadEvents("all", "");
+    loadEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const countries = useMemo(() => {
-    const unique = new Set<string>(["Korea", "Japan", "America"]);
+  const visibleEvents = useMemo(() => {
+    const normalizedQuery = query.toLowerCase().trim();
 
-    for (const event of events) {
-      unique.add(normalizeCountry(event.country));
-    }
+    return events
+      .filter(isUpcomingOrActive)
+      .filter((event) => {
+        if (!normalizedQuery) return true;
 
-    return Array.from(unique)
-      .filter(Boolean)
-      .sort((a, b) => {
-        const order = ["Korea", "Japan", "America"];
-        const aIndex = order.indexOf(a);
-        const bIndex = order.indexOf(b);
+        const searchable = [
+          event.title,
+          event.country,
+          event.city,
+          event.venue,
+          event.sourceName,
+          event.description,
+          ...(event.tags || []),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
 
-        if (aIndex !== -1 || bIndex !== -1) {
-          return (aIndex === -1 ? 99 : aIndex) - (bIndex === -1 ? 99 : bIndex);
-        }
-
-        return a.localeCompare(b);
+        return searchable.includes(normalizedQuery);
+      })
+      .filter((event) => {
+        if (country === "All countries") return true;
+        return event.country === country || event.country === "Global";
       });
-  }, [events]);
+  }, [events, query, country]);
 
-  const eventCount = events.filter((event) => event.result_type !== "source").length;
-  const sourceCount = events.filter((event) => event.result_type === "source").length;
+  const datedEventsCount = visibleEvents.filter(
+    (event) => event.startDate || event.endDate
+  ).length;
+
+  const sourceCount = visibleEvents.length - datedEventsCount;
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-10 text-white">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-8">
-          <p className="mb-2 text-sm font-medium uppercase tracking-[0.25em] text-cyan-300">
-            BoothScout
-          </p>
+      <section className="mx-auto max-w-6xl">
+        <p className="text-xs font-bold uppercase tracking-[0.5em] text-cyan-300">
+          BoothScout
+        </p>
 
-          <h1 className="text-4xl font-bold tracking-tight">
-            Global Technology Event Scout
-          </h1>
+        <h1 className="mt-4 text-4xl font-black tracking-tight">
+          Global Technology Event Scout
+        </h1>
 
-          <p className="mt-3 max-w-3xl text-slate-300">
-            Browse upcoming technology events and event sources across Korea, Japan, and America.
-            BoothScout combines saved tech events with curated source coverage
-            for AI, software, startup, developer, cloud, security, robotics,
-            hardware, and enterprise technology events.
-          </p>
-        </div>
+        <p className="mt-5 max-w-3xl text-base font-medium leading-7 text-slate-300">
+          Browse upcoming technology events and event sources across Korea,
+          Japan, and America. BoothScout compares today&apos;s date against
+          event dates and automatically hides events that have already passed.
+        </p>
 
-        <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+        <p className="mt-3 text-sm text-slate-400">
+          Today: <span className="font-semibold text-cyan-300">{getTodayLabel()}</span>
+        </p>
+
+        <div className="mt-10 rounded-2xl border border-slate-700 bg-slate-900/70 p-5">
           <div className="grid gap-4 md:grid-cols-[1fr_220px_170px]">
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") loadEvents();
+                if (event.key === "Enter") {
+                  loadEvents();
+                }
               }}
               placeholder="Search AI, cloud, startup, Tokyo, San Francisco, KINTEX..."
-              className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-cyan-400"
+              className="rounded-xl border border-slate-600 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-300"
             />
 
             <select
               value={country}
-              onChange={(event) => {
-                const nextCountry = event.target.value;
-                setCountry(nextCountry);
-                loadEvents(nextCountry, query);
-              }}
-              className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-400"
+              onChange={(event) => setCountry(event.target.value)}
+              className="rounded-xl border border-slate-600 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-300"
             >
-              <option value="all">All countries</option>
-              {countries.map((item) => (
-                <option key={item} value={item}>
-                  {item}
+              {COUNTRY_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
                 </option>
               ))}
             </select>
 
             <button
-              type="button"
-              onClick={() => loadEvents()}
-              disabled={loading}
-              className="rounded-xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={loadEvents}
+              disabled={isLoading}
+              className="rounded-xl bg-cyan-400 px-5 py-3 text-sm font-black text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "Searching..." : "Search sources"}
+              {isLoading ? "Searching..." : "Search sources"}
             </button>
           </div>
 
-          <div className="mt-4 grid gap-3 text-sm text-slate-400 md:grid-cols-3">
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              <span className="block text-lg font-bold text-white">
-                {events.length}
-              </span>
-              upcoming results
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-slate-700 px-4 py-3">
+              <p className="text-2xl font-black">{visibleEvents.length}</p>
+              <p className="text-sm font-semibold text-slate-400">
+                upcoming and active results
+              </p>
             </div>
 
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              <span className="block text-lg font-bold text-white">
-                {eventCount}
-              </span>
-              upcoming saved events
+            <div className="rounded-xl border border-slate-700 px-4 py-3">
+              <p className="text-2xl font-black">{datedEventsCount}</p>
+              <p className="text-sm font-semibold text-slate-400">
+                dated upcoming events
+              </p>
             </div>
 
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              <span className="block text-lg font-bold text-white">
-                {sourceCount}
-              </span>
-              discovery sources
+            <div className="rounded-xl border border-slate-700 px-4 py-3">
+              <p className="text-2xl font-black">{sourceCount}</p>
+              <p className="text-sm font-semibold text-slate-400">
+                active discovery sources
+              </p>
             </div>
           </div>
-        </section>
+        </div>
 
         {error ? (
-          <div className="mb-6 rounded-2xl border border-red-900 bg-red-950/40 p-5 text-red-200">
+          <div className="mt-6 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm font-semibold text-red-200">
             {error}
           </div>
         ) : null}
 
-        {loading ? (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-slate-300">
-            Searching upcoming saved events and global technology-event sources...
-          </div>
-        ) : null}
+        <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {visibleEvents.map((event) => (
+            <article
+              key={`${event.title}-${event.sourceUrl}`}
+              className="flex min-h-[330px] flex-col rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-sm"
+            >
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full bg-cyan-400 px-3 py-1 text-xs font-black text-slate-950">
+                  {event.startDate || event.endDate ? "Event" : "Discovery Source"}
+                </span>
 
-        {!loading && events.length === 0 ? (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-slate-300">
-            No technology events or source matches found. Try AI, startup,
-            developer, cloud, security, Tokyo, San Francisco, Korea, Japan, or
-            America.
-          </div>
-        ) : null}
+                <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-bold text-slate-300">
+                  {event.country}
+                </span>
 
-        <section className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {events.map((event) => {
-            const date = getEventDate(event);
-            const tags = Array.isArray(event.tags)
-              ? event.tags
-              : typeof event.tags === "string"
-                ? event.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
-                : [];
+                {event.venue ? (
+                  <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-bold text-slate-300">
+                    {event.venue}
+                  </span>
+                ) : null}
+              </div>
 
-            const isSource = event.result_type === "source";
+              <h2 className="mt-4 text-xl font-black leading-7 text-white">
+                {event.title}
+              </h2>
 
-            return (
-              <article
-                key={event.id}
-                className={`flex min-h-[280px] flex-col rounded-2xl border p-5 shadow-lg shadow-black/20 ${
-                  isSource
-                    ? "border-cyan-800 bg-cyan-950/20"
-                    : "border-slate-800 bg-slate-900/70"
-                }`}
+              <div className="mt-5 space-y-2 text-sm text-slate-300">
+                <p>
+                  <span className="font-semibold text-slate-500">
+                    {event.startDate || event.endDate ? "Date:" : "Status:"}
+                  </span>{" "}
+                  {formatDateRange(event)}
+                </p>
+
+                <p>
+                  <span className="font-semibold text-slate-500">
+                    Location:
+                  </span>{" "}
+                  {getLocation(event)}
+                </p>
+
+                <p>
+                  <span className="font-semibold text-slate-500">
+                    Source:
+                  </span>{" "}
+                  {event.sourceName}
+                </p>
+              </div>
+
+              {event.description ? (
+                <p className="mt-5 text-sm leading-6 text-slate-400">
+                  {event.description}
+                </p>
+              ) : null}
+
+              <a
+                href={event.url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-auto pt-6 text-sm font-bold text-cyan-300 hover:text-cyan-200"
               >
-                <div className="mb-4">
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        isSource
-                          ? "bg-cyan-400 text-slate-950"
-                          : "bg-cyan-400/10 text-cyan-300"
-                      }`}
-                    >
-                      {getResultBadge(event)}
-                    </span>
+                Open source link →
+              </a>
+            </article>
+          ))}
+        </div>
 
-                    <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">
-                      {normalizeCountry(event.country)}
-                    </span>
-
-                    {event.venue ? (
-                      <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">
-                        {event.venue}
-                      </span>
-                    ) : null}
-                  </div>
-
-                  <h2 className="line-clamp-3 text-xl font-bold leading-snug">
-                    {event.title}
-                  </h2>
-                </div>
-
-                <div className="space-y-2 text-sm text-slate-300">
-                  <p>
-                    <span className="text-slate-500">
-                      {isSource ? "Status:" : "Date:"}
-                    </span>{" "}
-                    {formatDate(date)}
-                    {event.end_date ? ` - ${formatDate(event.end_date)}` : ""}
-                  </p>
-
-                  {event.location || event.venue ? (
-                    <p>
-                      <span className="text-slate-500">Location:</span>{" "}
-                      {event.location || event.venue}
-                    </p>
-                  ) : null}
-
-                  {event.organizer || event.source ? (
-                    <p>
-                      <span className="text-slate-500">Source:</span>{" "}
-                      {event.organizer || event.source}
-                    </p>
-                  ) : null}
-                </div>
-
-                {event.description ? (
-                  <p className="mt-4 line-clamp-5 text-sm leading-6 text-slate-400">
-                    {event.description}
-                  </p>
-                ) : null}
-
-                {tags.length > 0 ? (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {tags.slice(0, 6).map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-400"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-
-                <div className="mt-auto pt-5">
-                  {event.url ? (
-                    <a
-                      href={event.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex rounded-xl border border-cyan-400/50 px-4 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-400 hover:text-slate-950"
-                    >
-                      {isSource ? "Browse source" : "View event"}
-                    </a>
-                  ) : (
-                    <span className="text-sm text-slate-500">
-                      No source link available
-                    </span>
-                  )}
-                </div>
-              </article>
-            );
-          })}
-        </section>
-      </div>
+        {!isLoading && visibleEvents.length === 0 ? (
+          <div className="mt-10 rounded-2xl border border-slate-700 bg-slate-900 p-8 text-center">
+            <h2 className="text-xl font-black">No upcoming events found.</h2>
+            <p className="mt-3 text-sm text-slate-400">
+              Try searching with a broader keyword like AI, cloud, startup,
+              developer, software, or security.
+            </p>
+          </div>
+        ) : null}
+      </section>
     </main>
   );
 }
