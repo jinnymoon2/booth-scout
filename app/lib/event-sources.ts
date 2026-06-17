@@ -908,9 +908,7 @@ export function getSourcesForCountry(country?: string | null) {
     return EVENT_SOURCES;
   }
 
-  return EVENT_SOURCES.filter(
-    (source) => source.country === normalized || source.country === "Global"
-  );
+  return EVENT_SOURCES.filter((source) => source.country === normalized);
 }
 
 export function looksLikeITEvent(text: string) {

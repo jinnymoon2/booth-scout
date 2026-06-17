@@ -2,10 +2,13 @@ import {
   EVENT_SOURCES,
   IT_EVENT_KEYWORDS,
   getSourcesForCountry,
-  looksLikeITEvent,
   normalizeCountry,
 } from "./event-sources";
 import { isUpcomingOrActive } from "./date-utils";
+import { CURATED_TECH_EVENTS } from "./curated-events";
+import { loadManualEvents } from "./manual-events";
+import { isTechnologyRelatedEvent, isTechnologyRelatedText } from "./event-filter";
+import { resolveEventWebsiteForCandidate } from "./event-links";
 
 export type DiscoveredEvent = {
   title: string;
@@ -19,6 +22,33 @@ export type DiscoveredEvent = {
   tags: string[];
   startDate?: string;
   endDate?: string;
+};
+
+const MONTHS: Record<string, string> = {
+  jan: "01",
+  january: "01",
+  feb: "02",
+  february: "02",
+  mar: "03",
+  march: "03",
+  apr: "04",
+  april: "04",
+  may: "05",
+  jun: "06",
+  june: "06",
+  jul: "07",
+  july: "07",
+  aug: "08",
+  august: "08",
+  sep: "09",
+  sept: "09",
+  september: "09",
+  oct: "10",
+  october: "10",
+  nov: "11",
+  november: "11",
+  dec: "12",
+  december: "12",
 };
 
 function decodeEntities(text: string) {
@@ -70,7 +100,7 @@ function unique<T>(items: T[], getKey: (item: T) => string) {
 
 async function fetchText(url: string) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), 12000);
 
   try {
     const response = await fetch(url, {
@@ -94,70 +124,112 @@ async function fetchText(url: string) {
   }
 }
 
+function normalizeYear(rawYear: string) {
+  if (rawYear.length === 2) {
+    return `20${rawYear}`;
+  }
+
+  return rawYear;
+}
+
+function isoDate(year: string, month: string, day: string) {
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+}
+
 function extractDateRange(text: string): {
   startDate?: string;
   endDate?: string;
 } {
   const ymdRange = text.match(
-    /\b(20\d{2})[./-](\d{1,2})[./-](\d{1,2})\s*(?:~|-|–|—|to)\s*(?:(20\d{2})[./-])?(\d{1,2})[./-](\d{1,2})\b/
+    /\b(20\d{2})[./-](\d{1,2})[./-](\d{1,2})\s*(?:~|-|–|—|to|～)\s*(?:(20\d{2})[./-])?(\d{1,2})[./-](\d{1,2})\b/
   );
 
   if (ymdRange) {
     const startYear = ymdRange[1];
-    const startMonth = ymdRange[2].padStart(2, "0");
-    const startDay = ymdRange[3].padStart(2, "0");
     const endYear = ymdRange[4] || startYear;
-    const endMonth = ymdRange[5].padStart(2, "0");
-    const endDay = ymdRange[6].padStart(2, "0");
 
     return {
-      startDate: `${startYear}-${startMonth}-${startDay}`,
-      endDate: `${endYear}-${endMonth}-${endDay}`,
+      startDate: isoDate(startYear, ymdRange[2], ymdRange[3]),
+      endDate: isoDate(endYear, ymdRange[5], ymdRange[6]),
     };
   }
 
   const singleYmd = text.match(/\b(20\d{2})[./-](\d{1,2})[./-](\d{1,2})\b/);
 
   if (singleYmd) {
-    const year = singleYmd[1];
-    const month = singleYmd[2].padStart(2, "0");
-    const day = singleYmd[3].padStart(2, "0");
+    const date = isoDate(singleYmd[1], singleYmd[2], singleYmd[3]);
 
     return {
-      startDate: `${year}-${month}-${day}`,
-      endDate: `${year}-${month}-${day}`,
+      startDate: date,
+      endDate: date,
     };
   }
 
-  const monthRange = text.match(
-    /\b(Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\s*(?:~|-|–|—|to)\s*(?:(Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)[a-z]*\.?\s+)?(\d{1,2})(?:st|nd|rd|th)?[,]?\s+(20\d{2})\b/i
+  const monthDayRange = text.match(
+    /\b(Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\s*(?:~|-|–|—|to)\s*(?:(Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)[a-z]*\.?\s+)?(\d{1,2})(?:st|nd|rd|th)?[,]?\s+(\d{2,4})\b/i
   );
 
-  if (monthRange) {
-    const startMonth = monthRange[1];
-    const startDay = monthRange[2];
-    const endMonth = monthRange[3] || startMonth;
-    const endDay = monthRange[4];
-    const year = monthRange[5];
+  if (monthDayRange) {
+    const startMonth = MONTHS[monthDayRange[1].toLowerCase()];
+    const endMonth = MONTHS[(monthDayRange[3] || monthDayRange[1]).toLowerCase()];
+    const year = normalizeYear(monthDayRange[5]);
 
     return {
-      startDate: `${startMonth} ${startDay}, ${year}`,
-      endDate: `${endMonth} ${endDay}, ${year}`,
+      startDate: isoDate(year, startMonth, monthDayRange[2]),
+      endDate: isoDate(year, endMonth, monthDayRange[4]),
+    };
+  }
+
+  const dayMonthRange = text.match(
+    /\b(\d{1,2})(?:st|nd|rd|th)?\s*(?:~|-|–|—|to)\s*(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)[a-z]*[,]?\s+(\d{2,4})\b/i
+  );
+
+  if (dayMonthRange) {
+    const month = MONTHS[dayMonthRange[3].toLowerCase()];
+    const year = normalizeYear(dayMonthRange[4]);
+
+    return {
+      startDate: isoDate(year, month, dayMonthRange[1]),
+      endDate: isoDate(year, month, dayMonthRange[2]),
     };
   }
 
   const monthSingle = text.match(
-    /\b(Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s+(20\d{2})\b/i
+    /\b(Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s+(\d{2,4})\b/i
   );
 
   if (monthSingle) {
+    const month = MONTHS[monthSingle[1].toLowerCase()];
+    const year = normalizeYear(monthSingle[3]);
+    const date = isoDate(year, month, monthSingle[2]);
+
     return {
-      startDate: `${monthSingle[1]} ${monthSingle[2]}, ${monthSingle[3]}`,
-      endDate: `${monthSingle[1]} ${monthSingle[2]}, ${monthSingle[3]}`,
+      startDate: date,
+      endDate: date,
     };
   }
 
   return {};
+}
+
+function normalizeSchemaDate(value: unknown) {
+  if (!value || typeof value !== "string") return undefined;
+
+  const match = value.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+
+  if (match) {
+    return `${match[1]}-${match[2]}-${match[3]}`;
+  }
+
+  const fallback = extractDateRange(value);
+
+  return fallback.startDate || fallback.endDate;
+}
+
+function toText(value: unknown) {
+  if (typeof value === "string") return decodeEntities(value).trim();
+
+  return "";
 }
 
 function isBoilerplateText(text: string) {
@@ -206,10 +278,6 @@ function isBoilerplateText(text: string) {
     "view agenda",
     "view full schedule",
     "download brochure",
-    "alarm",
-    "cancel alarm",
-    "please select",
-    "please enter",
     "문의",
     "오시는 길",
     "공지사항",
@@ -228,16 +296,10 @@ function cleanEventTitle(rawTitle: string, sourceName: string) {
   let title = decodeEntities(rawTitle)
     .replace(/\s+/g, " ")
     .replace(/[#]+/g, " ")
-    .replace(/\s+/g, " ")
     .trim();
 
-  if (!title) return "";
+  if (!title || isBoilerplateText(title)) return "";
 
-  if (isBoilerplateText(title)) {
-    return "";
-  }
-
-  // Remove source/page labels if they leaked into the title.
   title = title
     .replace(new RegExp(sourceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), " ")
     .replace(/\bEvent Calendar\b/gi, " ")
@@ -247,7 +309,6 @@ function cleanEventTitle(rawTitle: string, sourceName: string) {
     .replace(/\s+/g, " ")
     .trim();
 
-  // If the line contains a date, the real event title usually appears before it.
   const firstDateIndex = title.search(
     /\b(20\d{2})[./-]\d{1,2}[./-]\d{1,2}\b|\b(Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)[a-z]*\.?\s+\d{1,2}/i
   );
@@ -256,7 +317,6 @@ function cleanEventTitle(rawTitle: string, sourceName: string) {
     title = title.slice(0, firstDateIndex).trim();
   }
 
-  // Cut off common metadata fragments.
   title = title
     .split(/\bDate\s*:/i)[0]
     .split(/\bLocation\s*:/i)[0]
@@ -265,28 +325,18 @@ function cleanEventTitle(rawTitle: string, sourceName: string) {
     .split(/\bStatus\s*:/i)[0]
     .split(/\bHall\s+[A-Z0-9]/i)[0]
     .split(/\bConference Room/i)[0]
-    .trim();
-
-  title = title
     .replace(/\s*[-–—|]\s*$/, "")
     .replace(/^[,;:\-\s]+/, "")
     .replace(/[,;:\-\s]+$/, "")
     .replace(/\s+/g, " ")
     .trim();
 
-  if (isBoilerplateText(title)) {
-    return "";
-  }
+  if (isBoilerplateText(title)) return "";
 
   const words = title.split(/\s+/);
 
-  if (words.length > 14) {
-    return "";
-  }
-
-  if (title.length < 3 || title.length > 90) {
-    return "";
-  }
+  if (words.length > 16) return "";
+  if (title.length < 3 || title.length > 100) return "";
 
   return title;
 }
@@ -301,7 +351,9 @@ function scoreLine(line: string) {
     }
   }
 
-  if (/\b20\d{2}\b/.test(line)) score += 1;
+  if (/\b20\d{2}\b|\b\d{1,2}\s*(?:~|-|–|—|to)\s*\d{1,2}\b/i.test(line)) {
+    score += 2;
+  }
 
   if (
     /\bconference|expo|summit|week|forum|fair|show|festival|meetup|demo day|exhibition|전시|박람회|컨퍼런스|포럼|세미나|행사\b/i.test(
@@ -311,9 +363,8 @@ function scoreLine(line: string) {
     score += 2;
   }
 
-  if (line.length >= 12 && line.length <= 180) score += 1;
-  if (line.length > 240) score -= 4;
-
+  if (line.length >= 12 && line.length <= 220) score += 1;
+  if (line.length > 300) score -= 5;
   if (isBoilerplateText(line)) score -= 10;
 
   return score;
@@ -330,9 +381,9 @@ function extractCandidateLines(text: string) {
       line,
       score: scoreLine(line),
     }))
-    .filter((item) => item.score >= 3 && looksLikeITEvent(item.line))
+    .filter((item) => item.score >= 3 && isTechnologyRelatedText(item.line))
     .sort((a, b) => b.score - a.score)
-    .slice(0, 60)
+    .slice(0, 100)
     .map((item) => item.line);
 }
 
@@ -360,6 +411,147 @@ function matchesQuery(text: string, query?: string) {
   return queryWords.some((word) => normalizedText.includes(word));
 }
 
+function normalizeEventType(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map(String);
+  }
+
+  if (typeof value === "string") {
+    return [value];
+  }
+
+  return [];
+}
+
+function findJsonLdEvents(value: unknown): Record<string, unknown>[] {
+  const results: Record<string, unknown>[] = [];
+
+  function walk(node: unknown) {
+    if (!node) return;
+
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+
+    if (typeof node !== "object") return;
+
+    const object = node as Record<string, unknown>;
+    const types = normalizeEventType(object["@type"]).map((type) =>
+      type.toLowerCase()
+    );
+
+    if (types.includes("event")) {
+      results.push(object);
+    }
+
+    for (const value of Object.values(object)) {
+      walk(value);
+    }
+  }
+
+  walk(value);
+
+  return results;
+}
+
+function extractJsonLdObjects(html: string): unknown[] {
+  const scripts = [...html.matchAll(
+    /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+  )];
+
+  const parsed: unknown[] = [];
+
+  for (const script of scripts) {
+    const raw = decodeEntities(script[1]).trim();
+
+    if (!raw) continue;
+
+    try {
+      parsed.push(JSON.parse(raw));
+    } catch {
+      const cleaned = raw
+        .replace(/,\s*}/g, "}")
+        .replace(/,\s*]/g, "]");
+
+      try {
+        parsed.push(JSON.parse(cleaned));
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  return parsed;
+}
+
+function locationFromJsonLd(value: unknown) {
+  if (!value || typeof value !== "object") return {};
+
+  const location = value as Record<string, unknown>;
+  const name = toText(location.name);
+  const address = location.address;
+
+  let city = "";
+
+  if (address && typeof address === "object") {
+    const addressObject = address as Record<string, unknown>;
+    city =
+      toText(addressObject.addressLocality) ||
+      toText(addressObject.addressRegion) ||
+      "";
+  }
+
+  return {
+    venue: name || undefined,
+    city: city || undefined,
+  };
+}
+
+function eventFromJsonLd(
+  jsonEvent: Record<string, unknown>,
+  source: (typeof EVENT_SOURCES)[number]
+): DiscoveredEvent | null {
+  const name = cleanEventTitle(toText(jsonEvent.name), source.name);
+
+  if (!name) return null;
+
+  const startDate = normalizeSchemaDate(jsonEvent.startDate);
+  const endDate =
+    normalizeSchemaDate(jsonEvent.endDate) ||
+    normalizeSchemaDate(jsonEvent.startDate);
+
+  if (!startDate && !endDate) return null;
+
+  const location = locationFromJsonLd(jsonEvent.location);
+  const description = toText(jsonEvent.description);
+  const eventUrl = toText(jsonEvent.url) || source.url;
+
+  const combined = `${name} ${description} ${source.name}`;
+
+  if (!isTechnologyRelatedText(combined)) return null;
+
+  const event: DiscoveredEvent = {
+    title: name,
+    country: source.country,
+    city: location.city || source.city,
+    venue: location.venue || source.venue,
+    sourceName: source.name,
+    sourceUrl: source.url,
+    url: eventUrl,
+    description:
+      description ||
+      `Discovered from structured event metadata on ${source.name}.`,
+    tags: tagsFromText(combined),
+    startDate,
+    endDate,
+  };
+
+  if (!isUpcomingOrActive(event)) return null;
+
+  return event;
+}
+
 export async function discoverITEvents(options?: {
   country?: string;
   query?: string;
@@ -378,10 +570,30 @@ export async function discoverITEvents(options?: {
 
       if (!html) return;
 
+      const jsonLdObjects = extractJsonLdObjects(html);
+
+      for (const object of jsonLdObjects) {
+        const jsonEvents = findJsonLdEvents(object);
+
+        for (const jsonEvent of jsonEvents) {
+          const event = eventFromJsonLd(jsonEvent, source);
+
+          if (event) {
+            discovered.push(event);
+          }
+        }
+      }
+
       const text = stripHtml(html);
       const candidates = extractCandidateLines(text);
 
       for (const candidate of candidates) {
+        const dates = extractDateRange(candidate);
+
+        if (!dates.startDate && !dates.endDate) {
+          continue;
+        }
+
         const cleanTitle = cleanEventTitle(candidate, source.name);
 
         if (!cleanTitle) continue;
@@ -390,9 +602,7 @@ export async function discoverITEvents(options?: {
           source.venue ?? ""
         } ${source.city ?? ""} ${source.country}`;
 
-        if (!matchesQuery(combined, query)) continue;
-
-        const dates = extractDateRange(candidate);
+        if (!isTechnologyRelatedText(combined)) continue;
 
         const event: DiscoveredEvent = {
           title: cleanTitle,
@@ -401,8 +611,13 @@ export async function discoverITEvents(options?: {
           venue: source.venue,
           sourceName: source.name,
           sourceUrl: source.url,
-          url: source.url,
-          description: `Discovered from ${source.name}. Please verify the final schedule on the official source page.`,
+          url: await resolveEventWebsiteForCandidate({
+            html,
+            sourceUrl: source.url,
+            title: cleanTitle,
+            candidate,
+          }),
+          description: `Discovered from ${source.name}. Please verify the final schedule on the official event page.`,
           tags: tagsFromText(combined),
           startDate: dates.startDate,
           endDate: dates.endDate,
@@ -415,28 +630,69 @@ export async function discoverITEvents(options?: {
     })
   );
 
-  const fallbackSources: DiscoveredEvent[] = EVENT_SOURCES.filter((source) => {
-    const combined = `${source.name} ${source.venue ?? ""} ${source.country}`;
+  const manualEvents = loadManualEvents();
 
-    if (!matchesQuery(combined, query)) return false;
+  const curatedAndManualCandidates = [...CURATED_TECH_EVENTS, ...manualEvents].filter(
+    (event): event is DiscoveredEvent => Boolean(event)
+  );
 
-    return looksLikeITEvent(combined) || source.sourceType !== "venue-calendar";
-  }).map((source) => ({
-    title: source.name,
-    country: source.country,
-    city: source.city,
-    venue: source.venue,
-    sourceName: source.name,
-    sourceUrl: source.url,
-    url: source.url,
-    description:
-      "Continuously updated source for finding IT, AI, startup, developer, and technology-related events.",
-    tags: tagsFromText(source.name),
-  }));
+  const curatedAndManualMatches = curatedAndManualCandidates.filter((event) => {
+    const combined = [
+      event.title,
+      event.country,
+      event.city,
+      event.venue,
+      event.sourceName,
+      event.description,
+      ...(event.tags || []),
+    ]
+      .filter(Boolean)
+      .join(" ");
 
-  return unique([...discovered, ...fallbackSources], (event) => {
-    return `${event.title}-${event.country}-${event.venue ?? ""}`;
-  })
+    const countryMatches = country === "Global" || event.country === country;
+
+    return (
+      countryMatches &&
+      matchesQuery(combined, query) &&
+      Boolean(event.startDate || event.endDate) &&
+      isTechnologyRelatedEvent(event) &&
+      isUpcomingOrActive(event)
+    );
+  });
+
+  return unique(
+    [...curatedAndManualMatches, ...discovered].filter(
+      (event): event is DiscoveredEvent => Boolean(event)
+    ),
+    (event) => {
+      return `${event.title}-${event.country}-${event.venue ?? ""}-${
+        event.startDate ?? ""
+      }-${event.endDate ?? ""}`;
+    }
+  )
+    .filter((event) => Boolean(event.startDate || event.endDate))
+    .filter((event) => {
+      const combined = [
+        event.title,
+        event.country,
+        event.city,
+        event.venue,
+        event.sourceName,
+        event.description,
+        ...(event.tags || []),
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      return matchesQuery(combined, query);
+    })
+    .filter(isTechnologyRelatedEvent)
     .filter(isUpcomingOrActive)
+    .sort((a, b) => {
+      const aTime = new Date(a.startDate || a.endDate || "9999-12-31").getTime();
+      const bTime = new Date(b.startDate || b.endDate || "9999-12-31").getTime();
+
+      return aTime - bTime;
+    })
     .slice(0, limit);
 }

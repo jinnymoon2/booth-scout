@@ -22,7 +22,6 @@ const COUNTRY_OPTIONS = [
   "Korea",
   "Japan",
   "United States",
-  "Global",
 ];
 
 function formatDateRange(event: EventCard) {
@@ -88,7 +87,7 @@ export default function EventsPage() {
         params.set("country", country);
       }
 
-      params.set("limit", "250");
+      params.set("limit", "500");
 
       const response = await fetch(`/api/events?${params.toString()}`, {
         cache: "no-store",
@@ -105,7 +104,10 @@ export default function EventsPage() {
         : [];
 
       const cleanEvents = dedupeEvents(
-        rawEvents.filter(hasRealDate).filter(isUpcomingOrActive)
+        rawEvents
+          .filter((event): event is EventCard => Boolean(event))
+          .filter(hasRealDate)
+          .filter(isUpcomingOrActive)
       );
 
       setEvents(cleanEvents);
@@ -149,7 +151,7 @@ export default function EventsPage() {
       })
       .filter((event) => {
         if (country === "All countries") return true;
-        return event.country === country || event.country === "Global";
+        return event.country === country;
       });
   }, [events, query, country]);
 
@@ -276,7 +278,7 @@ export default function EventsPage() {
 
                 <p>
                   <span className="font-semibold text-slate-500">
-                    Source:
+                    Event source:
                   </span>{" "}
                   {event.sourceName}
                 </p>
@@ -294,7 +296,7 @@ export default function EventsPage() {
                 rel="noreferrer"
                 className="mt-auto pt-6 text-sm font-bold text-cyan-300 hover:text-cyan-200"
               >
-                Open event source →
+                Open event website →
               </a>
             </article>
           ))}
