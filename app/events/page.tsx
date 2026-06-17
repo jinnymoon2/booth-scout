@@ -17,22 +17,53 @@ type EventCard = {
   endDate?: string;
 };
 
-const COUNTRY_OPTIONS = ["All countries", "Korea", "Japan", "United States", "Global"];
+const COUNTRY_OPTIONS = [
+  "All countries",
+  "Korea",
+  "Japan",
+  "United States",
+  "Global",
+];
 
 function formatDateRange(event: EventCard) {
-  if (!event.startDate && !event.endDate) {
-    return "Continuously updated";
-  }
-
   if (event.startDate && event.endDate && event.startDate !== event.endDate) {
     return `${event.startDate} - ${event.endDate}`;
   }
 
-  return event.startDate || event.endDate || "Continuously updated";
+  return event.startDate || event.endDate || "Date not available";
 }
 
 function getLocation(event: EventCard) {
   return [event.venue, event.city].filter(Boolean).join(", ") || event.country;
+}
+
+function hasRealDate(event: EventCard) {
+  return Boolean(event.startDate || event.endDate);
+}
+
+function dedupeEvents(events: EventCard[]) {
+  const seen = new Set<string>();
+
+  return events.filter((event) => {
+    const key = [
+      event.title,
+      event.country,
+      event.venue,
+      event.startDate,
+      event.endDate,
+      event.sourceUrl,
+    ]
+      .filter(Boolean)
+      .join("-")
+      .toLowerCase();
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
 }
 
 export default function EventsPage() {
@@ -69,7 +100,15 @@ export default function EventsPage() {
         throw new Error(data.error || "Failed to load events.");
       }
 
-      setEvents(data.events || []);
+      const rawEvents: EventCard[] = Array.isArray(data.events)
+        ? data.events
+        : [];
+
+      const cleanEvents = dedupeEvents(
+        rawEvents.filter(hasRealDate).filter(isUpcomingOrActive)
+      );
+
+      setEvents(cleanEvents);
     } catch (error) {
       setError(
         error instanceof Error ? error.message : "Failed to load events."
@@ -88,6 +127,7 @@ export default function EventsPage() {
     const normalizedQuery = query.toLowerCase().trim();
 
     return events
+      .filter(hasRealDate)
       .filter(isUpcomingOrActive)
       .filter((event) => {
         if (!normalizedQuery) return true;
@@ -113,12 +153,6 @@ export default function EventsPage() {
       });
   }, [events, query, country]);
 
-  const datedEventsCount = visibleEvents.filter(
-    (event) => event.startDate || event.endDate
-  ).length;
-
-  const sourceCount = visibleEvents.length - datedEventsCount;
-
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-10 text-white">
       <section className="mx-auto max-w-6xl">
@@ -131,13 +165,14 @@ export default function EventsPage() {
         </h1>
 
         <p className="mt-5 max-w-3xl text-base font-medium leading-7 text-slate-300">
-          Browse upcoming technology events and event sources across Korea,
-          Japan, and America. BoothScout compares today&apos;s date against
-          event dates and automatically hides events that have already passed.
+          Browse upcoming IT, startup, AI, developer, cloud, cybersecurity,
+          hardware, robotics, and enterprise technology events. BoothScout
+          automatically hides events that have already passed.
         </p>
 
         <p className="mt-3 text-sm text-slate-400">
-          Today: <span className="font-semibold text-cyan-300">{getTodayLabel()}</span>
+          Today:{" "}
+          <span className="font-semibold text-cyan-300">{getTodayLabel()}</span>
         </p>
 
         <div className="mt-10 rounded-2xl border border-slate-700 bg-slate-900/70 p-5">
@@ -171,29 +206,24 @@ export default function EventsPage() {
               disabled={isLoading}
               className="rounded-xl bg-cyan-400 px-5 py-3 text-sm font-black text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isLoading ? "Searching..." : "Search sources"}
+              {isLoading ? "Searching..." : "Search events"}
             </button>
           </div>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
             <div className="rounded-xl border border-slate-700 px-4 py-3">
               <p className="text-2xl font-black">{visibleEvents.length}</p>
               <p className="text-sm font-semibold text-slate-400">
-                upcoming and active results
+                upcoming IT events
               </p>
             </div>
 
             <div className="rounded-xl border border-slate-700 px-4 py-3">
-              <p className="text-2xl font-black">{datedEventsCount}</p>
-              <p className="text-sm font-semibold text-slate-400">
-                dated upcoming events
+              <p className="text-2xl font-black">
+                {new Set(visibleEvents.map((event) => event.country)).size}
               </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-700 px-4 py-3">
-              <p className="text-2xl font-black">{sourceCount}</p>
               <p className="text-sm font-semibold text-slate-400">
-                active discovery sources
+                countries / regions
               </p>
             </div>
           </div>
@@ -206,14 +236,14 @@ export default function EventsPage() {
         ) : null}
 
         <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {visibleEvents.map((event) => (
+          {visibleEvents.map((event, index) => (
             <article
-              key={`${event.title}-${event.sourceUrl}`}
+              key={`${event.title}-${event.sourceUrl}-${event.startDate}-${index}`}
               className="flex min-h-[330px] flex-col rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-sm"
             >
               <div className="flex flex-wrap gap-2">
                 <span className="rounded-full bg-cyan-400 px-3 py-1 text-xs font-black text-slate-950">
-                  {event.startDate || event.endDate ? "Event" : "Discovery Source"}
+                  Event
                 </span>
 
                 <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-bold text-slate-300">
@@ -233,9 +263,7 @@ export default function EventsPage() {
 
               <div className="mt-5 space-y-2 text-sm text-slate-300">
                 <p>
-                  <span className="font-semibold text-slate-500">
-                    {event.startDate || event.endDate ? "Date:" : "Status:"}
-                  </span>{" "}
+                  <span className="font-semibold text-slate-500">Date:</span>{" "}
                   {formatDateRange(event)}
                 </p>
 
@@ -266,7 +294,7 @@ export default function EventsPage() {
                 rel="noreferrer"
                 className="mt-auto pt-6 text-sm font-bold text-cyan-300 hover:text-cyan-200"
               >
-                Open source link →
+                Open event source →
               </a>
             </article>
           ))}
@@ -274,10 +302,12 @@ export default function EventsPage() {
 
         {!isLoading && visibleEvents.length === 0 ? (
           <div className="mt-10 rounded-2xl border border-slate-700 bg-slate-900 p-8 text-center">
-            <h2 className="text-xl font-black">No upcoming events found.</h2>
+            <h2 className="text-xl font-black">
+              No dated upcoming IT events found.
+            </h2>
             <p className="mt-3 text-sm text-slate-400">
               Try searching with a broader keyword like AI, cloud, startup,
-              developer, software, or security.
+              developer, software, expo, conference, or cybersecurity.
             </p>
           </div>
         ) : null}
