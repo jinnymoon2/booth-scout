@@ -553,37 +553,11 @@ export default function EventsPage() {
             </button>
           </div>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="mt-4 grid gap-3">
             <div className={statClass}>
               <p className="text-2xl font-black">{visibleEvents.length}</p>
               <p className={`text-sm font-semibold ${mutedTextClass}`}>
                 {copy.upcomingTechEvents}
-              </p>
-            </div>
-
-            <div className={statClass}>
-              <p className="text-2xl font-black">
-                {
-                  visibleEvents.filter((event) =>
-                    isSearchedConference(event)
-                  ).length
-                }
-              </p>
-              <p className={`text-sm font-semibold ${mutedTextClass}`}>
-                {copy.searchedConferences}
-              </p>
-            </div>
-
-            <div className={statClass}>
-              <p className="text-2xl font-black">
-                {
-                  visibleEvents.filter((event) =>
-                    matchesCategory(event, "Startup")
-                  ).length
-                }
-              </p>
-              <p className={`text-sm font-semibold ${mutedTextClass}`}>
-                {copy.startupRelated}
               </p>
             </div>
           </div>
