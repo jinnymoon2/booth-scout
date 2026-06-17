@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { discoverITEvents } from "../../../lib/discover-events";
+import { discoverITEvents } from "../../lib/discover-events";
 
 export const dynamic = "force-dynamic";
 
