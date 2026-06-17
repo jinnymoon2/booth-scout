@@ -1,163 +1,66 @@
-export type BoothStatus = "open" | "waitlist" | "sold_out" | "closed" | "unknown";
+export type BoothStatus = "open" | "waitlist" | "sold_out" | "unknown";
 
-export type CostBand =
-  | "free"
-  | "under_2k"
-  | "2k_to_5k"
-  | "5k_to_15k"
-  | "15k_to_50k"
-  | "50k_plus"
-  | "contact";
+export type EventFormat =
+  | "expo_networking"
+  | "conference_sessions"
+  | "mixed"
+  | "unknown";
 
-export type EventFormat = "expo" | "conference" | "meetup" | "hybrid";
+export type EventCategory =
+  | "general_it"
+  | "developer_tools"
+  | "cloud_infrastructure"
+  | "cybersecurity"
+  | "ai_data"
+  | "devops_sre"
+  | "networking_infrastructure"
+  | "enterprise_software"
+  | "saas"
+  | "startup_tech"
+  | "hardware_iot"
+  | "fintech_it"
+  | "healthtech_it"
+  | "education_tech"
+  | "mixed"
+  | "unknown";
 
-export type Audience =
+export type AudienceType =
   | "developers"
-  | "infra"
-  | "ai_ml"
-  | "devrel"
+  | "it_decision_makers"
+  | "security_professionals"
+  | "cloud_infra_engineers"
+  | "data_ai_teams"
+  | "network_engineers"
+  | "enterprise_tech_buyers"
+  | "startup_founders"
   | "marketers"
-  | "founders"
-  | "mixed";
+  | "mixed"
+  | "unknown";
 
-export type Region = "us" | "japan" | "korea" | "europe" | "global";
-
-export type PriceConfidence = "verified" | "estimated" | "contact_only";
-
-export interface BoothEvent {
+export type BoothEvent = {
   id: string;
-  slug: string;
   name: string;
-  organizer: string;
-  city: string;
+  slug: string;
+  description: string | null;
+  website_url: string | null;
+  sponsor_url: string | null;
   country: string;
-  region: Region;
-  venue: string;
-  startDate: string; // ISO
-  endDate: string; // ISO
-  applicationDeadline: string | null; // ISO
-  boothStatus: BoothStatus;
-  costBand: CostBand;
-  costMinUsd: number | null;
-  costMaxUsd: number | null;
-  priceConfidence: PriceConfidence;
-  format: EventFormat;
-  audiences: Audience[];
-  expectedAttendees: number | null;
-  exhibitPageUrl: string;
-  homepageUrl: string;
-  summary: string;
-  highlights: string[];
-  lastVerifiedAt: string; // ISO
-  source: "seed" | "organizer_submission" | "scrape";
-  featured?: boolean;
-}
-
-export interface EventFilters {
-  q?: string;
-  region?: Region[];
-  format?: EventFormat[];
-  audience?: Audience[];
-  status?: BoothStatus[];
-  costMax?: CostBand;
-  startFrom?: string;
-  startTo?: string;
-}
-
-export interface SavedFilter {
-  id: string;
-  email: string;
-  name: string | null;
-  filters: EventFilters;
-  createdAt: string;
-  active: boolean;
-  lastSentAt: string | null;
-}
-
-export interface EventSubmission {
-  id: string;
-  eventName: string;
-  organizer: string;
-  contactEmail: string;
-  homepageUrl: string;
-  exhibitPageUrl: string;
-  notes: string;
-  status: "pending" | "approved" | "rejected";
-  submittedAt: string;
-}
-
-export const BOOTH_STATUS_LABELS: Record<BoothStatus, string> = {
-  open: "Booths open",
-  waitlist: "Waitlist",
-  sold_out: "Sold out",
-  closed: "Closed",
-  unknown: "Status unknown",
+  city: string | null;
+  region: string | null;
+  venue: string | null;
+  start_date: string;
+  end_date: string | null;
+  application_deadline: string | null;
+  booth_status: BoothStatus;
+  booth_price_min: number | null;
+  booth_price_max: number | null;
+  booth_price_currency: string | null;
+  price_visibility: string;
+  event_format: EventFormat;
+  event_category: EventCategory | null;
+  audience_type: AudienceType;
+  estimated_attendees: number | null;
+  source_url: string | null;
+  verified_status: string;
+  last_verified_at: string | null;
 };
-
-export const COST_BAND_LABELS: Record<CostBand, string> = {
-  free: "Free",
-  under_2k: "Under $2k",
-  "2k_to_5k": "$2k - $5k",
-  "5k_to_15k": "$5k - $15k",
-  "15k_to_50k": "$15k - $50k",
-  "50k_plus": "$50k+",
-  contact: "Contact for price",
-};
-
-export const COST_BAND_ORDER: CostBand[] = [
-  "free",
-  "under_2k",
-  "2k_to_5k",
-  "5k_to_15k",
-  "15k_to_50k",
-  "50k_plus",
-  "contact",
-];
-
-export const FORMAT_LABELS: Record<EventFormat, string> = {
-  expo: "Expo floor",
-  conference: "Conference",
-  meetup: "Meetup",
-  hybrid: "Hybrid",
-};
-
-export const AUDIENCE_LABELS: Record<Audience, string> = {
-  developers: "Developers",
-  infra: "Infra / SRE",
-  ai_ml: "AI / ML",
-  devrel: "DevRel",
-  marketers: "Marketers",
-  founders: "Founders",
-  mixed: "Mixed",
-};
-
-export const REGION_LABELS: Record<Region, string> = {
-  us: "United States",
-  japan: "Japan",
-  korea: "Korea",
-  europe: "Europe",
-  global: "Global / online",
-};
-
-export function isExhibitorFriendly(format: EventFormat) {
-  return format === "expo" || format === "hybrid";
-}
-
-export function costBandCeiling(c: CostBand): number | null {
-  switch (c) {
-    case "free":
-      return 0;
-    case "under_2k":
-      return 2000;
-    case "2k_to_5k":
-      return 5000;
-    case "5k_to_15k":
-      return 15000;
-    case "15k_to_50k":
-      return 50000;
-    case "50k_plus":
-      return null;
-    case "contact":
-      return null;
-  }
-}
