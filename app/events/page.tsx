@@ -413,9 +413,9 @@ export default function EventsPage() {
 
               {event.tags?.length ? (
                 <div className="mt-5 flex flex-wrap gap-2">
-                  {event.tags.slice(0, 6).map((tag) => (
+                  {Array.from(new Set(event.tags)).slice(0, 6).map((tag, tagIndex) => (
                     <span
-                      key={tag}
+                      key={`${tag}-${tagIndex}`}
                       className="rounded-full border border-slate-700 px-2.5 py-1 text-xs font-semibold text-slate-400"
                     >
                       {tag}
