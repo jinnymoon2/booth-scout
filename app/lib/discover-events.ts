@@ -21,20 +21,35 @@ export type DiscoveredEvent = {
   endDate?: string;
 };
 
-function stripHtml(html: string) {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
+function decodeEntities(text: string) {
+  return text
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&#039;/g, "'")
     .replace(/&quot;/g, '"')
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/&#8211;/g, "–")
+    .replace(/&#8212;/g, "—")
+    .replace(/&#8217;/g, "'")
+    .replace(/&#8220;/g, '"')
+    .replace(/&#8221;/g, '"')
+    .replace(/&#\d+;/g, " ");
+}
+
+function stripHtml(html: string) {
+  return decodeEntities(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+      .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
+      .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
+      .replace(/<header[\s\S]*?<\/header>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 function unique<T>(items: T[], getKey: (item: T) => string) {
@@ -145,6 +160,122 @@ function extractDateRange(text: string): {
   return {};
 }
 
+function isBoilerplateText(text: string) {
+  const lower = text.toLowerCase();
+
+  const boilerplatePatterns = [
+    "get in touch",
+    "open in google maps",
+    "open in naver maps",
+    "quick links",
+    "event calendar",
+    "coex visitors",
+    "planners attendees",
+    "about contact us",
+    "who we are",
+    "fields of business",
+    "partnerships",
+    "corporate identity",
+    "performance location",
+    "category convention",
+    "conference 401",
+    "conference 402",
+    "exhibition 320",
+    "b1 hall",
+    "visitor guide",
+    "privacy policy",
+    "terms of use",
+    "newsletter",
+    "site map",
+    "login",
+    "sign up",
+    "copyright",
+    "all rights reserved",
+    "alarm",
+    "cancel alarm",
+    "please select",
+    "please enter",
+    "문의",
+    "오시는 길",
+    "공지사항",
+    "고객 문의",
+    "개인정보",
+    "이용약관",
+    "알림 받기",
+    "알림 취소하기",
+    "입력해주세요",
+  ];
+
+  return boilerplatePatterns.some((pattern) => lower.includes(pattern));
+}
+
+function cleanEventTitle(rawTitle: string, sourceName: string) {
+  let title = decodeEntities(rawTitle)
+    .replace(/\s+/g, " ")
+    .replace(/[#]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!title) return "";
+
+  if (isBoilerplateText(title)) {
+    return "";
+  }
+
+  // Remove source/page labels if they leaked into the title.
+  title = title
+    .replace(new RegExp(sourceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), " ")
+    .replace(/\bEvent Calendar\b/gi, " ")
+    .replace(/\bEvents?\s*[-–—]\s*/gi, " ")
+    .replace(/\bCoex Visitors\b/gi, " ")
+    .replace(/\bCOEX Korean Full Schedule\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // If the line contains a date, the real event title usually appears before it.
+  const firstDateIndex = title.search(
+    /\b(20\d{2})[./-]\d{1,2}[./-]\d{1,2}\b|\b(Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)[a-z]*\.?\s+\d{1,2}/i
+  );
+
+  if (firstDateIndex > 5) {
+    title = title.slice(0, firstDateIndex).trim();
+  }
+
+  // Cut off common metadata fragments.
+  title = title
+    .split(/\bDate\s*:/i)[0]
+    .split(/\bLocation\s*:/i)[0]
+    .split(/\bVenue\s*:/i)[0]
+    .split(/\bSource\s*:/i)[0]
+    .split(/\bStatus\s*:/i)[0]
+    .split(/\bHall\s+[A-Z0-9]/i)[0]
+    .split(/\bConference Room/i)[0]
+    .trim();
+
+  title = title
+    .replace(/\s*[-–—|]\s*$/, "")
+    .replace(/^[,;:\-\s]+/, "")
+    .replace(/[,;:\-\s]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (isBoilerplateText(title)) {
+    return "";
+  }
+
+  const words = title.split(/\s+/);
+
+  if (words.length > 14) {
+    return "";
+  }
+
+  if (title.length < 3 || title.length > 90) {
+    return "";
+  }
+
+  return title;
+}
+
 function scoreLine(line: string) {
   const lower = line.toLowerCase();
   let score = 0;
@@ -166,7 +297,9 @@ function scoreLine(line: string) {
   }
 
   if (line.length >= 12 && line.length <= 180) score += 1;
-  if (line.length > 240) score -= 2;
+  if (line.length > 240) score -= 4;
+
+  if (isBoilerplateText(line)) score -= 10;
 
   return score;
 }
@@ -184,7 +317,7 @@ function extractCandidateLines(text: string) {
     }))
     .filter((item) => item.score >= 3 && looksLikeITEvent(item.line))
     .sort((a, b) => b.score - a.score)
-    .slice(0, 40)
+    .slice(0, 60)
     .map((item) => item.line);
 }
 
@@ -234,16 +367,20 @@ export async function discoverITEvents(options?: {
       const candidates = extractCandidateLines(text);
 
       for (const candidate of candidates) {
-        const combined = `${candidate} ${source.name} ${source.venue ?? ""} ${
-          source.city ?? ""
-        } ${source.country}`;
+        const cleanTitle = cleanEventTitle(candidate, source.name);
+
+        if (!cleanTitle) continue;
+
+        const combined = `${cleanTitle} ${candidate} ${source.name} ${
+          source.venue ?? ""
+        } ${source.city ?? ""} ${source.country}`;
 
         if (!matchesQuery(combined, query)) continue;
 
         const dates = extractDateRange(candidate);
 
         const event: DiscoveredEvent = {
-          title: candidate.slice(0, 140),
+          title: cleanTitle,
           country: source.country,
           city: source.city,
           venue: source.venue,
