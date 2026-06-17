@@ -26,13 +26,6 @@ export default function HomePage() {
             >
               Browse IT events
             </Link>
-
-            <Link
-              href="/api/events/discover?country=Korea"
-              className="rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-            >
-              Test Korea discovery API
-            </Link>
           </div>
         </div>
 

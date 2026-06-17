@@ -173,36 +173,6 @@ export const KOREA_TECH_SOURCES: KoreaTechSource[] = [
     source_kind: "festival",
     priority: 93,
   },
-  {
-    id: "international-conference-alerts-it-seoul",
-    title: "Information Technology Conferences in Seoul",
-    description:
-      "Conference directory for IT-related academic and professional conferences in Seoul. Useful for finding smaller events that do not appear on venue calendars.",
-    country: "Korea",
-    location: "Seoul",
-    city: "Seoul",
-    category: "Technology Conference Directory",
-    tags: ["IT", "Conference", "Research", "Engineering", "Technology"],
-    url: "https://internationalconferencealerts.com/conferences/seoul/information-technology",
-    source: "International Conference Alerts",
-    source_kind: "directory",
-    priority: 82,
-  },
-  {
-    id: "international-conference-alerts-ai-seoul",
-    title: "Artificial Intelligence Conferences in Seoul",
-    description:
-      "Conference directory for AI-related events in Seoul. Useful for academic, research, engineering, and professional AI conferences.",
-    country: "Korea",
-    location: "Seoul",
-    city: "Seoul",
-    category: "AI Conference Directory",
-    tags: ["AI", "Artificial Intelligence", "Conference", "Research", "Engineering"],
-    url: "https://internationalconferencealerts.com/conferences/seoul/artificial-intelligence",
-    source: "International Conference Alerts",
-    source_kind: "directory",
-    priority: 81,
-  },
 ];
 
 export function getKoreaTechSourceCards() {

@@ -277,20 +277,6 @@ export const GLOBAL_TECH_SOURCES: GlobalTechSource[] = [
     source_kind: "directory",
     priority: 89,
   },
-  {
-    id: "conference-alerts-ai-japan",
-    title: "AI Conferences in Japan",
-    description:
-      "Conference directory for artificial intelligence conferences in Japan. Useful for academic, research, and professional AI events.",
-    country: "Japan",
-    location: "Japan",
-    category: "AI Conference Directory",
-    tags: ["AI", "Artificial Intelligence", "Conference", "Research", "Japan"],
-    url: "https://conferencealerts.co.in/japan/artificial-intelligence/june",
-    source: "Conference Alerts",
-    source_kind: "directory",
-    priority: 80,
-  },
 
   // America
   {

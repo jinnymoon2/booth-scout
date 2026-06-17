@@ -50,14 +50,6 @@ export async function removeSavedFilter(id: string): Promise<boolean> {
   return deleteSavedFilter(id);
 }
 
-export async function sendAlertsForSavedFilters() {
-  return {
-    ok: true,
-    sent: 0,
-    message: "Email alerts have been removed from BoothScout.",
-  };
+  return;
 }
 
-export async function sendAlerts() {
-  return sendAlertsForSavedFilters();
-}

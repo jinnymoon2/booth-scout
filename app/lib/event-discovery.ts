@@ -441,7 +441,6 @@ Rules:
 - If the page lists multiple events, extract multiple events.
 - If the venue is COEX, KINTEX, SETEC, aT Center, or another venue, include it.
 - Do not invent exact booth prices.
-- Do not invent application deadlines.
 - Prefer "unknown" over making up missing facts.
 - Output valid JSON only.
 

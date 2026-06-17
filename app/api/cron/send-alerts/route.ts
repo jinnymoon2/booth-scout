@@ -3,11 +3,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    sent: 0,
-    message: "Email alerts have been removed from BoothScout.",
-  });
+  return NextResponse.json();
 }
 
 export async function POST() {

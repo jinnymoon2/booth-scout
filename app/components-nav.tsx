@@ -2,24 +2,18 @@ import Link from "next/link";
 
 export function SiteNav() {
   return (
-    <nav className="border-b bg-white">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <Link href="/" className="font-bold text-slate-950">
+    <header className="border-b border-slate-200 bg-white">
+      <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <Link href="/" className="text-lg font-bold text-slate-950">
           BoothScout
         </Link>
 
-        <div className="flex gap-4 text-sm text-slate-700">
+        <div className="flex items-center gap-4 text-sm font-medium text-slate-600">
           <Link href="/events" className="hover:text-slate-950">
-            Events
-          </Link>
-          <Link href="/alerts" className="hover:text-slate-950">
-            Alerts
-          </Link>
-          <Link href="/submit" className="hover:text-slate-950">
-            Submit
+            Browse events
           </Link>
         </div>
-      </div>
-    </nav>
+      </nav>
+    </header>
   );
 }
