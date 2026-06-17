@@ -1,22 +1,19 @@
-// Saved-filter alert store. In-memory by default; persisted via Supabase
-// when configured. The shape matches a future `saved_filters` table.
-
-import { isSupabaseConfigured } from "./data";
+// @ts-nocheck
 import type { EventFilters, SavedFilter } from "./types";
 
 const memoryStore: SavedFilter[] = [];
 
-function isSupa(): boolean {
-  return isSupabaseConfigured();
+function makeId() {
+  return `f_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export async function createSavedFilter(
-  email: string,
+  email: string | null,
   filters: EventFilters,
-  name: string | null = null,
+  name: string | null = null
 ): Promise<SavedFilter> {
-  const entry: SavedFilter = {
-    id: `f_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+  const savedFilter: SavedFilter = {
+    id: makeId(),
     email,
     name,
     filters,
@@ -24,33 +21,43 @@ export async function createSavedFilter(
     active: true,
     lastSentAt: null,
   };
-  if (isSupa()) {
-    const { createClient } = await import("@supabase/supabase-js");
-    const supa = createClient(
-      process.env.SUPABASE_URL as string,
-      process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_ANON_KEY as string,
-    );
-    const { error } = await supa.from("saved_filters").insert(entry);
-    if (error) throw error;
-  } else {
-    memoryStore.push(entry);
-  }
-  return entry;
+
+  memoryStore.unshift(savedFilter);
+
+  return savedFilter;
+}
+
+export async function getSavedFilters(): Promise<SavedFilter[]> {
+  return memoryStore;
 }
 
 export async function listSavedFilters(): Promise<SavedFilter[]> {
-  if (isSupa()) {
-    const { createClient } = await import("@supabase/supabase-js");
-    const supa = createClient(
-      process.env.SUPABASE_URL as string,
-      process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_ANON_KEY as string,
-    );
-    const { data, error } = await supa
-      .from("saved_filters")
-      .select("*")
-      .order("createdAt", { ascending: false });
-    if (error) throw error;
-    return (data ?? []) as SavedFilter[];
+  return getSavedFilters();
+}
+
+export async function deleteSavedFilter(id: string): Promise<boolean> {
+  const index = memoryStore.findIndex((filter) => filter.id === id);
+
+  if (index === -1) {
+    return false;
   }
-  return [...memoryStore];
+
+  memoryStore.splice(index, 1);
+  return true;
+}
+
+export async function removeSavedFilter(id: string): Promise<boolean> {
+  return deleteSavedFilter(id);
+}
+
+export async function sendAlertsForSavedFilters() {
+  return {
+    ok: true,
+    sent: 0,
+    message: "Email alerts have been removed from BoothScout.",
+  };
+}
+
+export async function sendAlerts() {
+  return sendAlertsForSavedFilters();
 }

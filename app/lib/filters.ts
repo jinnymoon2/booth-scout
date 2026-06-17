@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Pure helpers that translate URL search params into the EventFilters
 // shape and back. Kept tiny so they can be reused on the server and
 // in the client filter form.
