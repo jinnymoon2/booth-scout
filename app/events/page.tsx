@@ -415,7 +415,7 @@ export default function EventsPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 md:items-end">
+          <div className="flex flex-col items-center justify-center gap-3 md:min-w-[260px]">
             <div className="flex items-center gap-3">
               <span
                 className={
