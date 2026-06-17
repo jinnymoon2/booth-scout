@@ -45,7 +45,7 @@ function getSupabaseClient() {
 function normalizeEvent(event: RawEvent) {
   const title = event.title || event.name || "Untitled event";
   const description = event.description || event.summary || "";
-  const eventDate = event.start_date || event.date || event.created_at || null;
+  const eventDate = event.start_date || event.date || null;
 
   return {
     id: String(event.id || event.event_id || `${title}-${eventDate || event.url || ""}`),
@@ -71,10 +71,67 @@ function normalizeEvent(event: RawEvent) {
   };
 }
 
+function parseDate(value?: string | null): Date | null {
+  if (!value) return null;
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
+}
+
+function startOfToday(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function endOfDate(date: Date): Date {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    23,
+    59,
+    59,
+    999
+  );
+}
+
+function isPastEvent(event: ReturnType<typeof normalizeEvent>): boolean {
+  if (event.result_type === "source") {
+    return false;
+  }
+
+  const today = startOfToday();
+
+  const endDate = parseDate(event.end_date);
+  const startDate = parseDate(event.start_date || event.date);
+
+  const comparisonDate = endDate || startDate;
+
+  if (!comparisonDate) {
+    return false;
+  }
+
+  return endOfDate(comparisonDate) < today;
+}
+
+function isUpcomingOrUndatedEvent(event: ReturnType<typeof normalizeEvent>): boolean {
+  return !isPastEvent(event);
+}
+
 function getEventTime(event: ReturnType<typeof normalizeEvent>): number {
-  const raw = event.start_date || event.date || event.created_at || "";
+  const raw = event.start_date || event.date || "";
   const time = new Date(raw).getTime();
-  return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
+
+  if (Number.isNaN(time)) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  return time;
 }
 
 function normalizeUrl(url?: string | null) {
@@ -125,7 +182,9 @@ export async function GET(request: Request) {
         );
       }
 
-      events = filterTechnologyEvents((data || []) as RawEvent[]).map(normalizeEvent);
+      events = filterTechnologyEvents((data || []) as RawEvent[])
+        .map(normalizeEvent)
+        .filter(isUpcomingOrUndatedEvent);
     }
 
     if (includeSources) {
@@ -138,6 +197,7 @@ export async function GET(request: Request) {
 
     if (country && country !== "all") {
       const normalizedCountry = normalizeGlobalCountry(country);
+
       events = events.filter(
         (event) => normalizeGlobalCountry(event.country) === normalizedCountry
       );
@@ -170,15 +230,27 @@ export async function GET(request: Request) {
     events = dedupeEvents(events);
 
     events.sort((a, b) => {
-      const priorityDiff = (b.priority || 0) - (a.priority || 0);
-      if (priorityDiff !== 0) return priorityDiff;
+      const aIsSource = a.result_type === "source";
+      const bIsSource = b.result_type === "source";
 
-      return getEventTime(a) - getEventTime(b);
+      if (aIsSource !== bIsSource) {
+        return aIsSource ? 1 : -1;
+      }
+
+      const aTime = getEventTime(a);
+      const bTime = getEventTime(b);
+
+      if (aTime !== bTime) {
+        return aTime - bTime;
+      }
+
+      return (b.priority || 0) - (a.priority || 0);
     });
 
     return NextResponse.json({
       events,
       count: events.length,
+      filter: "technology-only, upcoming-only",
       sourceCoverage: includeSources
         ? "Global source registry enabled for Korea, Japan, and America"
         : "Database events only",

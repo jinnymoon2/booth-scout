@@ -178,7 +178,7 @@ export default function EventsPage() {
           </h1>
 
           <p className="mt-3 max-w-3xl text-slate-300">
-            Browse technology-event sources across Korea, Japan, and America.
+            Browse upcoming technology events and event sources across Korea, Japan, and America.
             BoothScout combines saved tech events with curated source coverage
             for AI, software, startup, developer, cloud, security, robotics,
             hardware, and enterprise technology events.
@@ -229,14 +229,14 @@ export default function EventsPage() {
               <span className="block text-lg font-bold text-white">
                 {events.length}
               </span>
-              total results
+              upcoming results
             </div>
 
             <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
               <span className="block text-lg font-bold text-white">
                 {eventCount}
               </span>
-              saved event cards
+              upcoming saved events
             </div>
 
             <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
@@ -266,7 +266,7 @@ export default function EventsPage() {
 
         {loading ? (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-slate-300">
-            Searching saved events and global technology-event sources...
+            Searching upcoming saved events and global technology-event sources...
           </div>
         ) : null}
 
