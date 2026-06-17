@@ -50,7 +50,7 @@ const COPY = {
     today: "Today",
     searchPlaceholder:
       "Search AI, startup, cloud, developer, Korea, Japan...",
-    searchButton: "Search events",
+    searchButton: "Refresh events",
     searching: "Searching...",
     upcomingTechEvents: "upcoming tech events",
     searchedConferences: "searched conferences",
@@ -94,7 +94,7 @@ const COPY = {
     today: "오늘",
     searchPlaceholder:
       "AI, 스타트업, 클라우드, 개발자, 한국, 일본 검색...",
-    searchButton: "행사 검색",
+    searchButton: "행사 새로고침",
     searching: "검색 중...",
     upcomingTechEvents: "예정된 기술 행사",
     searchedConferences: "검색 기반 컨퍼런스",
@@ -257,13 +257,13 @@ function isSearchedConference(event: EventCard) {
 
 export default function EventsPage() {
   const [events, setEvents] = useState<EventCard[]>([]);
-  const [query, setQuery] = useState("");
   const [country, setCountry] = useState("All countries");
   const [category, setCategory] = useState("All categories");
   const [theme, setTheme] = useState<ThemeMode>("dark");
   const [language, setLanguage] = useState<LanguageMode>("en");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [lastUpdated, setLastUpdated] = useState("");
 
   const isDark = theme === "dark";
   const isKorean = language === "ko";
@@ -297,10 +297,6 @@ export default function EventsPage() {
     try {
       const params = new URLSearchParams();
 
-      if (query.trim()) {
-        params.set("query", query.trim());
-      }
-
       if (country !== "All countries") {
         params.set("country", country);
       }
@@ -329,6 +325,11 @@ export default function EventsPage() {
       );
 
       setEvents(cleanEvents);
+      setLastUpdated(
+        data.syncedAt
+          ? new Date(data.syncedAt).toLocaleString()
+          : new Date().toLocaleString()
+      );
     } catch (error) {
       setError(
         error instanceof Error ? error.message : "Failed to load events."
@@ -340,25 +341,27 @@ export default function EventsPage() {
 
   useEffect(() => {
     loadEvents();
+
+    const refreshInterval = window.setInterval(() => {
+      loadEvents();
+    }, 60 * 60 * 1000);
+
+    return () => {
+      window.clearInterval(refreshInterval);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const visibleEvents = useMemo(() => {
-    const normalizedQuery = query.toLowerCase().trim();
-
     return events
       .filter(hasRealDate)
       .filter(isUpcomingOrActive)
-      .filter((event) => {
-        if (!normalizedQuery) return true;
-        return searchableText(event).includes(normalizedQuery);
-      })
       .filter((event) => {
         if (country === "All countries") return true;
         return event.country === country;
       })
       .filter((event) => matchesCategory(event, category));
-  }, [events, query, country, category]);
+  }, [events, country, category]);
 
   const pageClass = isDark
     ? "min-h-screen bg-slate-950 px-6 py-10 text-white"
@@ -413,6 +416,13 @@ export default function EventsPage() {
                 {getTodayLabel()}
               </span>
             </p>
+
+            {lastUpdated ? (
+              <p className={`mt-2 text-xs font-semibold ${mutedTextClass}`}>
+                Web data refreshed:{" "}
+                <span className="text-cyan-400">{lastUpdated}</span>
+              </p>
+            ) : null}
           </div>
 
           <div className="flex flex-col items-center justify-center gap-3 md:min-w-[260px]">
@@ -507,19 +517,7 @@ export default function EventsPage() {
         </div>
 
         <div className={`mt-10 ${panelClass}`}>
-          <div className="grid gap-4 md:grid-cols-[1fr_170px_180px_150px]">
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  loadEvents();
-                }
-              }}
-              placeholder={copy.searchPlaceholder}
-              className={inputClass}
-            />
-
+          <div className="grid gap-4 md:grid-cols-[170px_180px_150px]">
             <select
               value={country}
               onChange={(event) => setCountry(event.target.value)}
