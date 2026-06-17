@@ -5,6 +5,7 @@ import {
   normalizeCountry,
   type EventLike,
 } from "@/app/lib/tech-event-filter";
+import { getKoreaTechSourceCards } from "@/app/lib/korea-tech-sources";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,9 @@ type RawEvent = EventLike & {
   created_at?: string | null;
   updated_at?: string | null;
   image_url?: string | null;
+  source_kind?: string | null;
+  result_type?: string | null;
+  priority?: number | null;
 };
 
 function getSupabaseClient() {
@@ -42,7 +46,7 @@ function normalizeEvent(event: RawEvent) {
   const eventDate = event.start_date || event.date || event.created_at || null;
 
   return {
-    id: String(event.id || event.event_id || `${title}-${eventDate || ""}`),
+    id: String(event.id || event.event_id || `${title}-${eventDate || event.url || ""}`),
     title,
     description,
     category: event.category || "Technology",
@@ -59,6 +63,9 @@ function normalizeEvent(event: RawEvent) {
     image_url: event.image_url || null,
     created_at: event.created_at || null,
     updated_at: event.updated_at || null,
+    source_kind: event.source_kind || "event",
+    result_type: event.result_type || "event",
+    priority: event.priority ?? 50,
   };
 }
 
@@ -68,38 +75,69 @@ function getEventTime(event: ReturnType<typeof normalizeEvent>): number {
   return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
 }
 
+function normalizeUrl(url?: string | null) {
+  return (url || "")
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/$/, "");
+}
+
+function dedupeEvents<T extends ReturnType<typeof normalizeEvent>>(events: T[]): T[] {
+  const seen = new Set<string>();
+  const output: T[] = [];
+
+  for (const event of events) {
+    const key = normalizeUrl(event.url) || event.title.toLowerCase().trim();
+
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    output.push(event);
+  }
+
+  return output;
+}
+
+function isKoreaRequest(country: string | null) {
+  if (!country || country === "all") return true;
+  return normalizeCountry(country) === "Korea";
+}
+
 export async function GET(request: Request) {
   try {
     const supabase = getSupabaseClient();
 
-    if (!supabase) {
-      return NextResponse.json(
-        {
-          events: [],
-          error:
-            "Missing NEXT_PUBLIC_SUPABASE_URL or Supabase key. Add NEXT_PUBLIC_SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY.",
-        },
-        { status: 200 }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
     const country = searchParams.get("country");
     const q = searchParams.get("q");
+    const includeSources = searchParams.get("includeSources") !== "false";
 
-    const { data, error } = await supabase.from("events").select("*");
+    let events: ReturnType<typeof normalizeEvent>[] = [];
 
-    if (error) {
-      return NextResponse.json(
-        {
-          events: [],
-          error: error.message,
-        },
-        { status: 500 }
-      );
+    if (supabase) {
+      const { data, error } = await supabase.from("events").select("*");
+
+      if (error) {
+        return NextResponse.json(
+          {
+            events: [],
+            error: error.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      events = filterTechnologyEvents((data || []) as RawEvent[]).map(normalizeEvent);
     }
 
-    let events = filterTechnologyEvents((data || []) as RawEvent[]).map(normalizeEvent);
+    if (includeSources && isKoreaRequest(country)) {
+      const sourceCards = getKoreaTechSourceCards().map((source) =>
+        normalizeEvent(source as RawEvent)
+      );
+
+      events = [...events, ...sourceCards];
+    }
 
     if (country && country !== "all") {
       const normalizedCountry = normalizeCountry(country);
@@ -110,6 +148,7 @@ export async function GET(request: Request) {
 
     if (q && q.trim()) {
       const query = q.toLowerCase().trim();
+
       events = events.filter((event) => {
         const searchable = [
           event.title,
@@ -121,6 +160,8 @@ export async function GET(request: Request) {
           event.country,
           event.organizer,
           event.source,
+          event.source_kind,
+          event.result_type,
         ]
           .join(" ")
           .toLowerCase();
@@ -129,11 +170,25 @@ export async function GET(request: Request) {
       });
     }
 
-    events.sort((a, b) => getEventTime(a) - getEventTime(b));
+    events = dedupeEvents(events);
+
+    events.sort((a, b) => {
+      const priorityDiff = (b.priority || 0) - (a.priority || 0);
+      if (priorityDiff !== 0) return priorityDiff;
+
+      const aTime = getEventTime(a);
+      const bTime = getEventTime(b);
+
+      return aTime - bTime;
+    });
 
     return NextResponse.json({
       events,
       count: events.length,
+      sourceCoverage:
+        includeSources && isKoreaRequest(country)
+          ? "Korea source registry enabled"
+          : "Database events only",
     });
   } catch (error) {
     return NextResponse.json(

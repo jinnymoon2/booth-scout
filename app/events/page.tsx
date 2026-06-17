@@ -18,10 +18,13 @@ type EventItem = {
   source?: string;
   url?: string;
   image_url?: string | null;
+  source_kind?: string;
+  result_type?: "event" | "source" | string;
+  priority?: number;
 };
 
 function formatDate(value?: string | null) {
-  if (!value) return "Date TBA";
+  if (!value) return "Continuously updated";
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -57,19 +60,42 @@ function getEventDate(event: EventItem) {
   return event.start_date || event.date || null;
 }
 
+function getResultBadge(event: EventItem) {
+  if (event.result_type === "source") {
+    if (event.source_kind === "venue") return "Venue Source";
+    if (event.source_kind === "directory") return "Conference Directory";
+    if (event.source_kind === "festival") return "Startup Festival";
+    return "Discovery Source";
+  }
+
+  return "Event";
+}
+
 export default function EventsPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [country, setCountry] = useState("all");
+  const [country, setCountry] = useState("Korea");
 
   async function loadEvents() {
     setLoading(true);
     setError("");
 
     try {
-      const response = await fetch("/api/events", {
+      const params = new URLSearchParams();
+
+      if (country && country !== "all") {
+        params.set("country", country);
+      }
+
+      if (query.trim()) {
+        params.set("q", query.trim());
+      }
+
+      params.set("includeSources", "true");
+
+      const response = await fetch(`/api/events?${params.toString()}`, {
         cache: "no-store",
       });
 
@@ -104,6 +130,8 @@ export default function EventsPage() {
       unique.add(normalizeCountry(event.country));
     }
 
+    unique.add("Korea");
+
     return Array.from(unique)
       .filter(Boolean)
       .sort((a, b) => {
@@ -113,35 +141,8 @@ export default function EventsPage() {
       });
   }, [events]);
 
-  const filteredEvents = useMemo(() => {
-    const q = query.trim().toLowerCase();
-
-    return events.filter((event) => {
-      const eventCountry = normalizeCountry(event.country);
-
-      if (country !== "all" && eventCountry !== country) {
-        return false;
-      }
-
-      if (!q) return true;
-
-      const searchable = [
-        event.title,
-        event.description,
-        event.category,
-        Array.isArray(event.tags) ? event.tags.join(" ") : event.tags,
-        event.venue,
-        event.location,
-        event.country,
-        event.organizer,
-        event.source,
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return searchable.includes(q);
-    });
-  }, [events, query, country]);
+  const eventCount = events.filter((event) => event.result_type !== "source").length;
+  const sourceCount = events.filter((event) => event.result_type === "source").length;
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-10 text-white">
@@ -150,22 +151,27 @@ export default function EventsPage() {
           <p className="mb-2 text-sm font-medium uppercase tracking-[0.25em] text-cyan-300">
             BoothScout
           </p>
+
           <h1 className="text-4xl font-bold tracking-tight">
-            Technology Events
+            Korea Technology Event Scout
           </h1>
-          <p className="mt-3 max-w-2xl text-slate-300">
-            Browse technology, AI, software, cloud, cybersecurity, semiconductor,
-            startup, and developer-related events. Non-technology exhibitions are
-            filtered out automatically.
+
+          <p className="mt-3 max-w-3xl text-slate-300">
+            BoothScout now combines saved technology events with curated Korean
+            event sources outside COEX, including KINTEX, SETEC, BEXCO, EXCO,
+            startup festivals, AI exhibitions, and conference directories.
           </p>
         </div>
 
         <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-          <div className="grid gap-4 md:grid-cols-[1fr_220px_160px]">
+          <div className="grid gap-4 md:grid-cols-[1fr_220px_170px]">
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search AI, cloud, security, software..."
+              onKeyDown={(event) => {
+                if (event.key === "Enter") loadEvents();
+              }}
+              placeholder="Search AI, cloud, startup, KINTEX, Busan, robotics..."
               className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-cyan-400"
             />
 
@@ -188,38 +194,62 @@ export default function EventsPage() {
               disabled={loading}
               className="rounded-xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "Loading..." : "Refresh"}
+              {loading ? "Searching..." : "Search sources"}
             </button>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-400">
-            <span>{filteredEvents.length} technology events shown</span>
-            <span>•</span>
-            <span>{events.length} tech events loaded from database</span>
+          <div className="mt-4 grid gap-3 text-sm text-slate-400 md:grid-cols-3">
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <span className="block text-lg font-bold text-white">
+                {events.length}
+              </span>
+              total results
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <span className="block text-lg font-bold text-white">
+                {eventCount}
+              </span>
+              saved event cards
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <span className="block text-lg font-bold text-white">
+                {sourceCount}
+              </span>
+              discovery sources
+            </div>
           </div>
         </section>
 
+        <section className="mb-6 rounded-2xl border border-cyan-900/60 bg-cyan-950/20 p-5 text-sm leading-6 text-cyan-100">
+          <strong className="text-cyan-300">Why this is better than plain AI search:</strong>{" "}
+          BoothScout now has a fixed source map for Korean tech events. AI can miss
+          venues, hallucinate events, or return random blog posts. This page gives
+          users a repeatable list of places to check, including sources outside COEX.
+        </section>
+
         {error ? (
-          <div className="rounded-2xl border border-red-900 bg-red-950/40 p-5 text-red-200">
+          <div className="mb-6 rounded-2xl border border-red-900 bg-red-950/40 p-5 text-red-200">
             {error}
           </div>
         ) : null}
 
         {loading ? (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-slate-300">
-            Loading saved technology events...
+            Searching saved events and Korean tech-event sources...
           </div>
         ) : null}
 
-        {!loading && filteredEvents.length === 0 ? (
+        {!loading && events.length === 0 ? (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-slate-300">
-            No technology events found. This usually means the database has no
-            tech-related events yet, or the current filter is too narrow.
+            No technology events or source matches found. Try AI, startup, cloud,
+            robotics, KINTEX, Busan, Daegu, or security.
           </div>
         ) : null}
 
         <section className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {filteredEvents.map((event) => {
+          {events.map((event) => {
             const date = getEventDate(event);
             const tags = Array.isArray(event.tags)
               ? event.tags
@@ -227,19 +257,38 @@ export default function EventsPage() {
                 ? event.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
                 : [];
 
+            const isSource = event.result_type === "source";
+
             return (
               <article
                 key={event.id}
-                className="flex min-h-[260px] flex-col rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg shadow-black/20"
+                className={`flex min-h-[280px] flex-col rounded-2xl border p-5 shadow-lg shadow-black/20 ${
+                  isSource
+                    ? "border-cyan-800 bg-cyan-950/20"
+                    : "border-slate-800 bg-slate-900/70"
+                }`}
               >
                 <div className="mb-4">
                   <div className="mb-3 flex flex-wrap gap-2">
-                    <span className="rounded-full bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-300">
-                      {event.category || "Technology"}
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        isSource
+                          ? "bg-cyan-400 text-slate-950"
+                          : "bg-cyan-400/10 text-cyan-300"
+                      }`}
+                    >
+                      {getResultBadge(event)}
                     </span>
+
                     <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">
                       {normalizeCountry(event.country)}
                     </span>
+
+                    {event.venue ? (
+                      <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">
+                        {event.venue}
+                      </span>
+                    ) : null}
                   </div>
 
                   <h2 className="line-clamp-3 text-xl font-bold leading-snug">
@@ -249,7 +298,9 @@ export default function EventsPage() {
 
                 <div className="space-y-2 text-sm text-slate-300">
                   <p>
-                    <span className="text-slate-500">Date:</span>{" "}
+                    <span className="text-slate-500">
+                      {isSource ? "Status:" : "Date:"}
+                    </span>{" "}
                     {formatDate(date)}
                     {event.end_date ? ` - ${formatDate(event.end_date)}` : ""}
                   </p>
@@ -261,23 +312,23 @@ export default function EventsPage() {
                     </p>
                   ) : null}
 
-                  {event.organizer ? (
+                  {event.organizer || event.source ? (
                     <p>
-                      <span className="text-slate-500">Organizer:</span>{" "}
-                      {event.organizer}
+                      <span className="text-slate-500">Source:</span>{" "}
+                      {event.organizer || event.source}
                     </p>
                   ) : null}
                 </div>
 
                 {event.description ? (
-                  <p className="mt-4 line-clamp-4 text-sm leading-6 text-slate-400">
+                  <p className="mt-4 line-clamp-5 text-sm leading-6 text-slate-400">
                     {event.description}
                   </p>
                 ) : null}
 
                 {tags.length > 0 ? (
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {tags.slice(0, 5).map((tag) => (
+                    {tags.slice(0, 6).map((tag) => (
                       <span
                         key={tag}
                         className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-400"
@@ -296,7 +347,7 @@ export default function EventsPage() {
                       rel="noreferrer"
                       className="inline-flex rounded-xl border border-cyan-400/50 px-4 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-400 hover:text-slate-950"
                     >
-                      View event
+                      {isSource ? "Browse source" : "View event"}
                     </a>
                   ) : (
                     <span className="text-sm text-slate-500">
