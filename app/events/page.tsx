@@ -46,12 +46,28 @@ function normalizeCountry(country?: string | null) {
     lower === "korea republic of" ||
     lower === "rok" ||
     raw === "대한민국" ||
-    raw === "한국"
+    raw === "한국" ||
+    lower === "korea"
   ) {
     return "Korea";
   }
 
-  if (lower === "korea") return "Korea";
+  if (lower === "japan" || raw === "日本" || raw === "일본") {
+    return "Japan";
+  }
+
+  if (
+    lower === "america" ||
+    lower === "usa" ||
+    lower === "u.s." ||
+    lower === "u.s.a." ||
+    lower === "us" ||
+    lower === "united states" ||
+    lower === "united states of america" ||
+    raw === "미국"
+  ) {
+    return "America";
+  }
 
   return raw || "Unknown";
 }
@@ -65,6 +81,7 @@ function getResultBadge(event: EventItem) {
     if (event.source_kind === "venue") return "Venue Source";
     if (event.source_kind === "directory") return "Conference Directory";
     if (event.source_kind === "festival") return "Startup Festival";
+    if (event.source_kind === "conference") return "Conference Source";
     return "Discovery Source";
   }
 
@@ -76,21 +93,21 @@ export default function EventsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [country, setCountry] = useState("Korea");
+  const [country, setCountry] = useState("all");
 
-  async function loadEvents() {
+  async function loadEvents(nextCountry = country, nextQuery = query) {
     setLoading(true);
     setError("");
 
     try {
       const params = new URLSearchParams();
 
-      if (country && country !== "all") {
-        params.set("country", country);
+      if (nextCountry && nextCountry !== "all") {
+        params.set("country", nextCountry);
       }
 
-      if (query.trim()) {
-        params.set("q", query.trim());
+      if (nextQuery.trim()) {
+        params.set("q", nextQuery.trim());
       }
 
       params.set("includeSources", "true");
@@ -120,23 +137,27 @@ export default function EventsPage() {
   }
 
   useEffect(() => {
-    loadEvents();
+    loadEvents("all", "");
   }, []);
 
   const countries = useMemo(() => {
-    const unique = new Set<string>();
+    const unique = new Set<string>(["Korea", "Japan", "America"]);
 
     for (const event of events) {
       unique.add(normalizeCountry(event.country));
     }
 
-    unique.add("Korea");
-
     return Array.from(unique)
       .filter(Boolean)
       .sort((a, b) => {
-        if (a === "Korea") return -1;
-        if (b === "Korea") return 1;
+        const order = ["Korea", "Japan", "America"];
+        const aIndex = order.indexOf(a);
+        const bIndex = order.indexOf(b);
+
+        if (aIndex !== -1 || bIndex !== -1) {
+          return (aIndex === -1 ? 99 : aIndex) - (bIndex === -1 ? 99 : bIndex);
+        }
+
         return a.localeCompare(b);
       });
   }, [events]);
@@ -153,13 +174,14 @@ export default function EventsPage() {
           </p>
 
           <h1 className="text-4xl font-bold tracking-tight">
-            Korea Technology Event Scout
+            Global Technology Event Scout
           </h1>
 
           <p className="mt-3 max-w-3xl text-slate-300">
-            BoothScout now combines saved technology events with curated Korean
-            event sources outside COEX, including KINTEX, SETEC, BEXCO, EXCO,
-            startup festivals, AI exhibitions, and conference directories.
+            Browse technology-event sources across Korea, Japan, and America.
+            BoothScout combines saved tech events with curated source coverage
+            for AI, software, startup, developer, cloud, security, robotics,
+            hardware, and enterprise technology events.
           </p>
         </div>
 
@@ -171,13 +193,17 @@ export default function EventsPage() {
               onKeyDown={(event) => {
                 if (event.key === "Enter") loadEvents();
               }}
-              placeholder="Search AI, cloud, startup, KINTEX, Busan, robotics..."
+              placeholder="Search AI, cloud, startup, Tokyo, San Francisco, KINTEX..."
               className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-cyan-400"
             />
 
             <select
               value={country}
-              onChange={(event) => setCountry(event.target.value)}
+              onChange={(event) => {
+                const nextCountry = event.target.value;
+                setCountry(nextCountry);
+                loadEvents(nextCountry, query);
+              }}
               className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-400"
             >
               <option value="all">All countries</option>
@@ -190,7 +216,7 @@ export default function EventsPage() {
 
             <button
               type="button"
-              onClick={loadEvents}
+              onClick={() => loadEvents()}
               disabled={loading}
               className="rounded-xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -223,10 +249,13 @@ export default function EventsPage() {
         </section>
 
         <section className="mb-6 rounded-2xl border border-cyan-900/60 bg-cyan-950/20 p-5 text-sm leading-6 text-cyan-100">
-          <strong className="text-cyan-300">Why this is better than plain AI search:</strong>{" "}
-          BoothScout now has a fixed source map for Korean tech events. AI can miss
-          venues, hallucinate events, or return random blog posts. This page gives
-          users a repeatable list of places to check, including sources outside COEX.
+          <strong className="text-cyan-300">Coverage:</strong>{" "}
+          Korea includes COEX, KINTEX, SETEC, BEXCO, EXCO, AI EXPO KOREA,
+          Smart Tech Korea, NextRise, and Try Everything. Japan includes Tokyo
+          Big Sight, Makuhari Messe, SusHi Tech Tokyo, Manufacturing World Tokyo,
+          and developer/AI conference directories. America includes
+          WeAreDevelopers North America, The AI Conference, Startup Grind,
+          NVIDIA GTC, CES, and developer conference directories.
         </section>
 
         {error ? (
@@ -237,14 +266,15 @@ export default function EventsPage() {
 
         {loading ? (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-slate-300">
-            Searching saved events and Korean tech-event sources...
+            Searching saved events and global technology-event sources...
           </div>
         ) : null}
 
         {!loading && events.length === 0 ? (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-slate-300">
-            No technology events or source matches found. Try AI, startup, cloud,
-            robotics, KINTEX, Busan, Daegu, or security.
+            No technology events or source matches found. Try AI, startup,
+            developer, cloud, security, Tokyo, San Francisco, Korea, Japan, or
+            America.
           </div>
         ) : null}
 

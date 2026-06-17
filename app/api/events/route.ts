@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
   filterTechnologyEvents,
-  normalizeCountry,
   type EventLike,
 } from "@/app/lib/tech-event-filter";
-import { getKoreaTechSourceCards } from "@/app/lib/korea-tech-sources";
+import {
+  getGlobalTechSourceCards,
+  normalizeGlobalCountry,
+} from "@/app/lib/global-tech-sources";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +55,7 @@ function normalizeEvent(event: RawEvent) {
     tags: event.tags || [],
     venue: event.venue || "",
     location: event.location || event.venue || "",
-    country: normalizeCountry(event.country),
+    country: normalizeGlobalCountry(event.country),
     start_date: event.start_date || event.date || null,
     end_date: event.end_date || null,
     date: eventDate,
@@ -99,11 +101,6 @@ function dedupeEvents<T extends ReturnType<typeof normalizeEvent>>(events: T[]):
   return output;
 }
 
-function isKoreaRequest(country: string | null) {
-  if (!country || country === "all") return true;
-  return normalizeCountry(country) === "Korea";
-}
-
 export async function GET(request: Request) {
   try {
     const supabase = getSupabaseClient();
@@ -131,8 +128,8 @@ export async function GET(request: Request) {
       events = filterTechnologyEvents((data || []) as RawEvent[]).map(normalizeEvent);
     }
 
-    if (includeSources && isKoreaRequest(country)) {
-      const sourceCards = getKoreaTechSourceCards().map((source) =>
+    if (includeSources) {
+      const sourceCards = getGlobalTechSourceCards(country).map((source) =>
         normalizeEvent(source as RawEvent)
       );
 
@@ -140,9 +137,9 @@ export async function GET(request: Request) {
     }
 
     if (country && country !== "all") {
-      const normalizedCountry = normalizeCountry(country);
+      const normalizedCountry = normalizeGlobalCountry(country);
       events = events.filter(
-        (event) => normalizeCountry(event.country) === normalizedCountry
+        (event) => normalizeGlobalCountry(event.country) === normalizedCountry
       );
     }
 
@@ -176,19 +173,15 @@ export async function GET(request: Request) {
       const priorityDiff = (b.priority || 0) - (a.priority || 0);
       if (priorityDiff !== 0) return priorityDiff;
 
-      const aTime = getEventTime(a);
-      const bTime = getEventTime(b);
-
-      return aTime - bTime;
+      return getEventTime(a) - getEventTime(b);
     });
 
     return NextResponse.json({
       events,
       count: events.length,
-      sourceCoverage:
-        includeSources && isKoreaRequest(country)
-          ? "Korea source registry enabled"
-          : "Database events only",
+      sourceCoverage: includeSources
+        ? "Global source registry enabled for Korea, Japan, and America"
+        : "Database events only",
     });
   } catch (error) {
     return NextResponse.json(
